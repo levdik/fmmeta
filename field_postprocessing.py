@@ -143,6 +143,10 @@ def _calculate_example_max_eff_and_plot():
     plt.show()
 
 
+def min_distance_between_amplitude_vectors(x, y):
+    return jnp.linalg.norm(x) ** 2 + jnp.linalg.norm(y) ** 2 - 2 * jnp.abs(jnp.dot(x, jnp.conj(y)))
+
+
 if __name__ == '__main__':
     _test_intensity_map()
     # _test_focusing_efficiency()
