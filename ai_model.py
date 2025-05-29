@@ -4,9 +4,9 @@ from flax import nnx
 import optax
 
 from scattering_solver_factory import prepare_lens_pixel_width_to_scattered_amplitudes_function
-from field_postprocessing import min_distance_between_amplitude_vectors
+from field_postprocessing import min_difference_between_amplitude_vectors
+from fmmax import basis
 
-import matplotlib.pyplot as plt
 import pickle
 
 
@@ -75,7 +75,7 @@ class SquarePixelLensOptimizingModel(nnx.Module):
 #     plt.show()
 
 
-def define_and_train_amplitudes_to_widths_model():
+def define_and_train_amplitudes_to_widths_model(hidden_dims):
     data = jnp.load('ai_training_data/red_th500.npz')
     widths = jnp.array(data['widths'])
     widths = widths.reshape(widths.shape[0], -1)
@@ -89,7 +89,8 @@ def define_and_train_amplitudes_to_widths_model():
         n_propagating_waves=amplitudes.shape[-1] // 2,
         n_lens_params=widths.shape[-1],
         # hidden_layer_dims=[256, 256, 128],
-        hidden_layer_dims=[512, 256, 128, 64],
+        # hidden_layer_dims=[512, 256, 128, 64],
+        hidden_layer_dims=hidden_dims,
         rngs=nnx.Rngs(0)
     )
     # model = SquarePixelLensOptimizingModel.load(
@@ -156,11 +157,11 @@ def define_and_train_amplitudes_to_widths_model():
     model.save('ai_models/red_7x7_p300_th500_big.pkl')
 
 
-def define_and_train_amplitudes_to_widths_model_online_inversion():
+def define_and_train_amplitudes_to_widths_model_online_inversion(hidden_dims):
     max_width = 300.
     n_propagating = 37
     n_lens_params = 7 ** 2
-    hidden_dims = [128, 128, 128]
+    # hidden_dims = [128, 128, 128]
 
     model = SquarePixelLensOptimizingModel(
         n_propagating_waves=n_propagating,
@@ -189,13 +190,27 @@ def define_and_train_amplitudes_to_widths_model_online_inversion():
     )
     vmap_f = jax.vmap(jax.jit(widths_to_amps_function))
 
+    expansion = basis.generate_expansion(
+        primitive_lattice_vectors=basis.LatticeVectors(u=basis.X, v=basis.Y),
+        approximate_num_terms=n_propagating,
+    )
+    basis_indices = expansion.basis_coefficients
+    n, m = basis_indices.T
+    weights = 1 / (jnp.sqrt(n ** 2 + m ** 2) + 1)
+    weights = jnp.concatenate([weights, weights])
+    def weighted_min_distance_between_amplitude_vectors(a1, a2):
+        diff = min_difference_between_amplitude_vectors(a1, a1)
+        mean_weighted_distance = jnp.sum(diff * weights) / jnp.sum(weights)
+        return mean_weighted_distance
+    vmap_weighted_distance_f = jax.vmap(weighted_min_distance_between_amplitude_vectors)
+
     @nnx.jit
     def train_step(model, optimizer, amps):
         def loss_fn(model):
             widths = model(amps) * max_width
             true_amps = vmap_f(widths)
-            # TODO: possibly normalize per amplitude importance to facilitate learning
-            min_distances = jax.vmap(min_distance_between_amplitude_vectors)(amps, true_amps)
+            # min_distances = jax.vmap(min_distance_between_amplitude_vectors)(amps, true_amps)
+            min_distances = vmap_weighted_distance_f(amps, true_amps)
             loss = jnp.mean(min_distances)
             return loss
 
@@ -206,6 +221,7 @@ def define_and_train_amplitudes_to_widths_model_online_inversion():
 
     rng_key = jax.random.key(0)
     optimizer = nnx.Optimizer(model, optax.adam(learning_rate))
+    min_loss = 100.
 
     for epoch in range(n_epochs):
         rng_key, rng_subkey = jax.random.split(rng_key)
@@ -214,51 +230,16 @@ def define_and_train_amplitudes_to_widths_model_online_inversion():
         amps /= jnp.linalg.norm(amps, axis=-1).reshape(-1, 1)
         current_loss = train_step(model, optimizer, amps)
         print(epoch, current_loss, sep='\t')
-    model.save(f'ai_models/red_7x7_p300_th500_online_inversion_{"_".join(list(map(str, hidden_dims)))}.pkl')
-
-
-def test_model():
-    wavelength = 650
-    permittivity = 4
-    lens_subpixel_size = 300
-    n_lens_subpixels = 7
-    lens_thickness = 500
-    approximate_number_of_terms = 300
-
-    max_width = lens_subpixel_size
-    n_widths = n_lens_subpixels ** 2
-    n_propagating = 37
-    # hidden_layer_dims = [256, 256, 128]
-    hidden_layer_dims = [512, 256, 128, 64]
-    model = SquarePixelLensOptimizingModel.load(
-        'ai_models/red_7x7_p300_th500_big_intermediate.pkl',
-            n_propagating_waves=n_propagating,
-            n_lens_params=n_widths,
-            hidden_layer_dims=hidden_layer_dims
-    )
-
-    target_amps = jnp.zeros(2 * n_propagating, dtype=complex).at[1].set(1.)
-    target_amps = target_amps / jnp.linalg.norm(target_amps)
-    print(target_amps)
-    predicted_widths = jnp.round(model(target_amps) * max_width).reshape(n_lens_subpixels, n_lens_subpixels)
-
-    from ai_trainig_set_generator import prepare_amplitude_generating_function
-    f = prepare_amplitude_generating_function(
-        wavelength=wavelength,
-        permittivity=permittivity,
-        lens_subpixel_size=lens_subpixel_size,
-        n_lens_subpixels=n_lens_subpixels,
-        lens_thickness=lens_thickness,
-        approximate_number_of_terms=approximate_number_of_terms
-    )
-    actual_amps = f(predicted_widths.reshape(n_lens_subpixels, n_lens_subpixels))
-    print(jnp.sum(jnp.abs(actual_amps[:n_propagating]) ** 2))
-    print(jnp.sum(jnp.abs(actual_amps[n_propagating:]) ** 2))
-    print(actual_amps[:n_propagating])
-    print(actual_amps[n_propagating:])
+        if current_loss < min_loss:
+            min_loss = current_loss
+            model.save(
+                f'ai_models/red_7x7_p300_th500_online_inversion_{"_".join(list(map(str, hidden_dims)))}_batch{batch_size}_intermediate.pkl')
+    model.save(
+        f'ai_models/red_7x7_p300_th500_online_inversion_{"_".join(list(map(str, hidden_dims)))}_batch{batch_size}.pkl')
 
 
 if __name__ == '__main__':
-    # define_and_train_amplitudes_to_widths_model()
-    define_and_train_amplitudes_to_widths_model_online_inversion()
-    # test_model()
+    dims = list(map(int, input().split()))
+
+    # define_and_train_amplitudes_to_widths_model(dims)
+    define_and_train_amplitudes_to_widths_model_online_inversion(dims)

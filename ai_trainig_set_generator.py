@@ -43,7 +43,6 @@ def prepare_amplitude_generating_function(
     fwd_amplitude = jnp.asarray(inc_fwd_amplitude[..., np.newaxis], dtype=jnp.float32)
 
     def trans_ref_fourier_amplitudes(widths):
-        # TODO: deal with reshaping to a matrix (deside where this is going to happen: before function or after)
         shapes = jnp.stack([widths] + [jnp.zeros_like(widths)] * 3, axis=-1)
         permittivity_pattern = generate_lens_permittivity_map(
             shapes=shapes,
@@ -108,27 +107,30 @@ def generate_and_save_training_set():
     )
     map_f = jax.vmap(f)
 
-    key = jax.random.key(0)
-    for i in range(5):
-        n_training_samples = 10000
-        key, subkey = jax.random.split(key)
-        widths = lens_subpixel_size * jax.random.uniform(
-            subkey,
-            shape=(n_training_samples, n_lens_subpixels, n_lens_subpixels)
-        )
-        trans_ref_propagating_amplitudes = map_f(widths)
-        jnp.savez(f'ai_training_data/red_th500_batch{i}.npz', amps=trans_ref_propagating_amplitudes, widths=widths)
+    n_training_samples = 100
+
+    widths = lens_subpixel_size * jax.random.uniform(
+        jax.random.key(0),
+        shape=(n_training_samples, n_lens_subpixels, n_lens_subpixels)
+    )
+    trans_ref_propagating_amplitudes = map_f(widths)
+    jnp.savez('ai_training_data/red_th500.npz', amps=trans_ref_propagating_amplitudes, widths=widths)
 
 
-def merge_data_batches():
-    data_batches = [jnp.load(f'ai_training_data/red_th500_batch{i}.npz') for i in range(5)]
-    amps = jnp.vstack([batch['amps'] for batch in data_batches])
-    widths = jnp.vstack([batch['widths'] for batch in data_batches])
-    print(amps.shape)
-    print(widths.shape)
-    jnp.savez('ai_training_data/red_th500.npz', amps=amps, widths=widths)
+def _examine_training_set():
+    jnp.set_printoptions(linewidth=1000)
+
+    data = jnp.load('ai_training_data/red_th500.npz')
+    widths = jnp.array(data['widths'])
+    amplitudes = jnp.array(data['amps'])
+    n_modes = amplitudes.shape[1] // 2
+    trans_amps = amplitudes[:, :n_modes]
+    ref_amps = amplitudes[:, n_modes:]
+    print('Uniform amp:', jnp.sqrt(1 / n_modes))
+    print(jnp.min(jnp.abs(trans_amps), axis=0))
+    print(jnp.max(jnp.abs(trans_amps), axis=0))
 
 
 if __name__ == "__main__":
     # generate_and_save_training_set()
-    merge_data_batches()
+    _examine_training_set()

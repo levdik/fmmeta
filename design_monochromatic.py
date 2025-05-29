@@ -1,14 +1,12 @@
 import jax
 import jax.numpy as jnp
 import numpy as np
-import matplotlib.pyplot as plt
 import optax
 
 from fmmax import basis, fmm, fields, scattering
 
 from lens_permittivity_profile_generator import generate_lens_permittivity_map
-from field_postprocessing import make_jit_focusing_efficiency_function, intensity_map_from_fourier_amplitudes
-from field_plotter import plot_amplitude_map
+from field_postprocessing import make_jit_focusing_efficiency_function
 
 
 def generate_monochromatic_lens_symmetry_indices(
@@ -65,7 +63,6 @@ def prepare_functions_for_optimization(
     fwd_amplitude = jnp.asarray(inc_fwd_amplitude[..., np.newaxis], dtype=jnp.float32)
 
     def focal_plane_field_fourier_amplitudes(unique_widths):
-        # unique_widths = jnp.concatenate([unique_widths, jnp.zeros(1)])
         widths = unique_widths[symmetry_indices]
         shapes = jnp.stack([widths] + [jnp.zeros_like(widths)] * 3, axis=-1)
         permittivity_pattern = generate_lens_permittivity_map(
@@ -84,22 +81,22 @@ def prepare_functions_for_optimization(
         )
         s_matrices_interior = scattering.stack_s_matrices_interior(
             layer_solve_results=[solve_result_ambient, solve_result_crystal, solve_result_ambient],
-            layer_thicknesses=[focal_length, lens_thickness, focal_length]  # type: ignore[arg-type]
+            layer_thicknesses=[0., lens_thickness, 0.]  # type: ignore[arg-type]
         )
         amplitudes_interior = fields.stack_amplitudes_interior(
             s_matrices_interior=s_matrices_interior,
-            forward_amplitude_0_start=jnp.zeros_like(fwd_amplitude),
-            backward_amplitude_N_end=fwd_amplitude,
+            forward_amplitude_0_start=fwd_amplitude,
+            backward_amplitude_N_end=jnp.zeros_like(fwd_amplitude),
         )
-        forward_amps, backwards_amps = amplitudes_interior[0]
+        transmitted_forward_amps, _ = amplitudes_interior[-1]
         focal_plane_amps = fields.propagate_amplitude(
-            amplitude=backwards_amps,
+            amplitude=transmitted_forward_amps,
             distance=focal_length,  # type: ignore[arg-type]
             layer_solve_result=solve_result_ambient
         )
         (_, ef_y, _), _ = fields.fields_from_wave_amplitudes(
-            forward_amplitude=forward_amps,
-            backward_amplitude=focal_plane_amps,
+            forward_amplitude=focal_plane_amps,
+            backward_amplitude=jnp.zeros_like(focal_plane_amps),
             layer_solve_result=solve_result_ambient
         )
         return ef_y.flatten()
@@ -120,14 +117,13 @@ def prepare_functions_for_optimization(
     return (
         focal_plane_field_fourier_amplitudes,
         total_efficiency_from_unique_widths,
-        # n_unique_widths - 1,
         n_unique_widths - 1,
         propagating_basis_indices
     )
 
 
-def run_optimization_and_visualization():
-    wavelength = 450
+def run_optimization_and_visualize_results():
+    wavelength = 650
     permittivity = 4
     lens_subpixel_size = 300
     n_lens_subpixels = 7
@@ -150,29 +146,6 @@ def run_optimization_and_visualization():
         approximate_number_of_terms=approximate_number_of_terms,
     )
 
-    # key = jax.random.key(2)
-    # key, subkey = jax.random.split(key)
-    # initial_unique_widths = jax.random.uniform(subkey, (n_unique_widths,), minval=0., maxval=1.)
-    # initial_unique_widths = jnp.array([360., 300., 220., 235., 180., 85.]) / 400
-    # initial_unique_widths = jnp.array([271.2412, 239.99948, 199.95596, 199.9913, 167.50484, 150.41992]) / 400
-    # initial_unique_widths = 0.5 * jnp.ones(n_unique_widths)
-
-    # print(len(expansion.basis_coefficients), focusing_efficiency_from_unique_widths(initial_unique_widths))
-
-    # val_and_grad_f = jax.value_and_grad(total_efficiency_from_unique_widths)
-    # current_unique_widths = initial_unique_widths
-    # learning_rate = 0.05
-    # # final_learning_rate = 0.01
-    # n_iterations = 100
-    # # learning_rate_step = (learning_rate - final_learning_rate) / n_iterations
-    # for i in range(n_iterations):
-    #     print(current_unique_widths * lens_subpixel_size)
-    #     value, grad = val_and_grad_f(current_unique_widths)
-    #     print(value)
-    #     current_unique_widths += learning_rate * grad
-    #     # learning_rate -= learning_rate_step
-    #     current_unique_widths = jnp.clip(current_unique_widths, 0., 1.)
-
     def loss_fn(arg):
         return -total_efficiency_from_unique_widths(arg)
 
@@ -182,38 +155,14 @@ def run_optimization_and_visualization():
     # optimizer = optax.sgd(learning_rate)
     optimizer = optax.adam(learning_rate, b1=0.5)
 
-    # pillar_centsrs =
-
     x_init = 0.5 * jnp.ones(n_unique_widths)
 
     # key = jax.random.key(1)
     # x_init = jax.random.uniform(key, (n_unique_widths,))
 
-    # x_init = jnp.asarray([266, 268, 190, 199,  130]) / 400
-
-    # [266 268 190 199 130] - optimum so far, eff = 0.7390, obtained by uniform 200 pillars (fixed empty corner)
-    # rate 0.05 stabilizes at ~50 steps (slowly drifting though)
-    # rate 0.1 goes into borders quickly and stabilizes at eff = 0.72
-    # rate 0.01 reaches 0.72 at ~15 steps, and then slowly drifts towards 0.7390, the best so fat
-    # probably for bad initial guesses 0.05 is the best, 0.01 is too slow - OR NO, 0.05 SEEMS TO BE OFTEN UNSTABLE
-    # actually there seems to be a lot of local flat areas
-    # with initial x=all 300, fixed empty corner it drifted towards [361 315 325 239 204] eff=0.6790 (rate 0.01)
-    # but didn't converge with 100 steps
-    # with initial x=all 300, fixed empty corner and rate 0.05 it drifted into the edge [400 280 377 238 210] eff=0.6597
-    # with initial x=all 100, fixed empty corner and rate 0.05 it drifted into the edge [304 209   0 194   0] eff=0.7209
-
-    # GENERAL CONCLUSION ON THE GRADIENT DESCENT
-    # quite sensitive to initial conditions
-    # easily gets pushed towards corners
-    # many flat regions that vary in efficiency (0.66, 0.72, 0.74 - so significantly)
-    # it's possible to get a decent resul, but only by tweaking parameters
-
-    # IDEA FOR VISUALIZATION
-    # plot loss functions over steps for many different parameters, coloring lines that bumped into corners
-
     opt_state = optimizer.init(x_init)
 
-    def project(x):
+    def project_onto_boundaries(x):
         return jnp.clip(x, 0., 1.)
 
     @jax.jit
@@ -221,7 +170,7 @@ def run_optimization_and_visualization():
         loss, grad = loss_value_and_grad_fn(x)
         updates, opt_state = optimizer.update(grad, opt_state)
         x = optax.apply_updates(x, updates)
-        x = project(x)
+        x = project_onto_boundaries(x)
         return x, opt_state, loss, grad
 
     x = x_init
@@ -234,30 +183,8 @@ def run_optimization_and_visualization():
             print("Stop on gradient norm criteria")
             break
         x = new_x
-
-
-    # initial_amps = focal_plane_field_fourier_amplitudes(initial_unique_widths * lens_subpixel_size)[:len(propagating_basis_indices)]
-    # # initial_eff = jit_focusing_efficiency_from_amplitudes(initial_amps) * jnp.sum(jnp.abs(initial_amps) ** 2)
-    # # print(initial_eff)
-    # initial_intensity_map = intensity_map_from_fourier_amplitudes(initial_amps, propagating_basis_indices)
-    # initial_intensity_map = (initial_intensity_map + initial_intensity_map.T) / 2
-    #
-    # final_amps = focal_plane_field_fourier_amplitudes(current_unique_widths * lens_subpixel_size)[:len(propagating_basis_indices)]
-    # # final_eff = jit_focusing_efficiency_from_amplitudes(final_amps) * jnp.sum(jnp.abs(final_amps) ** 2)
-    # # print(final_eff)
-    # intensity_map = intensity_map_from_fourier_amplitudes(final_amps, propagating_basis_indices)
-    # intensity_map = (intensity_map + intensity_map.T) / 2
-    #
-    # max_intensity = max(float(jnp.max(intensity_map)), float(jnp.max(initial_intensity_map)))
-    # fig, ax = plt.subplots(1, 2)
-    # plot_amplitude_map(
-    #     fig, ax[0], initial_intensity_map,
-    #     wavelength_nm=wavelength, map_bounds=[0, n_lens_subpixels * lens_subpixel_size], vmax=max_intensity)
-    # plot_amplitude_map(
-    #     fig, ax[1], intensity_map,
-    #     wavelength_nm=wavelength, map_bounds=[0, n_lens_subpixels * lens_subpixel_size], vmax=max_intensity)
-    # plt.show()
+    print(x)
 
 
 if __name__ == '__main__':
-    run_optimization_and_visualization()
+    run_optimization_and_visualize_results()
