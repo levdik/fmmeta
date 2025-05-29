@@ -170,6 +170,7 @@ def _examine_efficiency_eigenvalues():
 def min_distance_between_amplitude_vectors(x, y):
     return jnp.linalg.norm(x) ** 2 + jnp.linalg.norm(y) ** 2 - 2 * jnp.abs(jnp.dot(x, jnp.conj(y)))
 
+
 def min_difference_between_amplitude_vectors(x, y):
     arg_min = jnp.angle(jnp.dot(x, jnp.conj(y)))
     return jnp.abs(jnp.exp(1j * arg_min) * x - y)

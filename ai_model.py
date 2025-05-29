@@ -4,7 +4,7 @@ from flax import nnx
 import optax
 
 from scattering_solver_factory import prepare_lens_pixel_width_to_scattered_amplitudes_function
-from field_postprocessing import min_difference_between_amplitude_vectors
+from field_postprocessing import min_difference_between_amplitude_vectors, min_distance_between_amplitude_vectors
 from fmmax import basis
 
 import pickle
@@ -177,8 +177,8 @@ def define_and_train_amplitudes_to_widths_model_online_inversion(hidden_dims):
     # )
 
     learning_rate = 1e-3
-    batch_size = 10
-    n_epochs = 3
+    batch_size = 25
+    n_epochs = 1000
 
     widths_to_amps_function = prepare_lens_pixel_width_to_scattered_amplitudes_function(
         wavelength=650,
@@ -190,27 +190,27 @@ def define_and_train_amplitudes_to_widths_model_online_inversion(hidden_dims):
     )
     vmap_f = jax.vmap(jax.jit(widths_to_amps_function))
 
-    expansion = basis.generate_expansion(
-        primitive_lattice_vectors=basis.LatticeVectors(u=basis.X, v=basis.Y),
-        approximate_num_terms=n_propagating,
-    )
-    basis_indices = expansion.basis_coefficients
-    n, m = basis_indices.T
-    weights = 1 / (jnp.sqrt(n ** 2 + m ** 2) + 1)
-    weights = jnp.concatenate([weights, weights])
-    def weighted_min_distance_between_amplitude_vectors(a1, a2):
-        diff = min_difference_between_amplitude_vectors(a1, a1)
-        mean_weighted_distance = jnp.sum(diff * weights) / jnp.sum(weights)
-        return mean_weighted_distance
-    vmap_weighted_distance_f = jax.vmap(weighted_min_distance_between_amplitude_vectors)
+    # expansion = basis.generate_expansion(
+    #     primitive_lattice_vectors=basis.LatticeVectors(u=basis.X, v=basis.Y),
+    #     approximate_num_terms=n_propagating,
+    # )
+    # basis_indices = expansion.basis_coefficients
+    # n, m = basis_indices.T
+    # weights = 1 / (jnp.sqrt(n ** 2 + m ** 2) + 1)
+    # weights = jnp.concatenate([weights, weights])
+    # def weighted_min_distance_between_amplitude_vectors(a1, a2):
+    #     diff = min_difference_between_amplitude_vectors(a1, a2)
+    #     mean_weighted_distance = jnp.sum(diff * weights) / jnp.sum(weights)
+    #     return mean_weighted_distance
+    # vmap_weighted_distance_f = jax.vmap(weighted_min_distance_between_amplitude_vectors)
 
     @nnx.jit
     def train_step(model, optimizer, amps):
         def loss_fn(model):
             widths = model(amps) * max_width
             true_amps = vmap_f(widths)
-            # min_distances = jax.vmap(min_distance_between_amplitude_vectors)(amps, true_amps)
-            min_distances = vmap_weighted_distance_f(amps, true_amps)
+            min_distances = jax.vmap(min_distance_between_amplitude_vectors)(amps, true_amps)
+            # min_distances = vmap_weighted_distance_f(amps, true_amps)
             loss = jnp.mean(min_distances)
             return loss
 
