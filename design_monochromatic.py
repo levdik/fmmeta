@@ -183,7 +183,6 @@ def run_optimization_and_visualize_results():
             print("Stop on gradient norm criteria")
             break
         x = new_x
-    print(x)
 
 
 if __name__ == '__main__':

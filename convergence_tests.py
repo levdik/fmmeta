@@ -18,7 +18,7 @@ def calculate_lens_efficiency_convergence_data(
         focal_length,
         approx_num_terms_range
 ):
-    efficiencies = []
+    convergence_data = []
     key = jax.random.key(1)
     widths = jax.random.uniform(key, (n_lens_subpixels, n_lens_subpixels), minval=0., maxval=lens_subpixel_size)
 
@@ -93,21 +93,24 @@ def calculate_lens_efficiency_convergence_data(
             )
             return ef_y.flatten()
 
-        def focusing_efficiency():
-            fourier_amps = focal_plane_field_fourier_amplitudes()
-            efficiency = calculate_focusing_efficiency(
-                amplitudes=fourier_amps[:n_propagating_waves],
-                basis_indices=propagating_basis_indices
-            )
-            return efficiency
+        # def focusing_efficiency():
+        #     fourier_amps = focal_plane_field_fourier_amplitudes()
+        #     efficiency = calculate_focusing_efficiency(
+        #         amplitudes=fourier_amps[:n_propagating_waves],
+        #         basis_indices=propagating_basis_indices
+        #     )
+        #     return efficiency
 
-        efficiencies.append(float(focusing_efficiency()))
+        # convergence_data.append(float(focusing_efficiency()))
+        convergence_data.append(complex(focal_plane_field_fourier_amplitudes()[0]))
 
-    return efficiencies
+
+    return convergence_data
 
 
 if __name__ == '__main__':
-    n_terms_range = list(range(50, 501, 50))
+    n_terms_range = list(range(1, 10, 1))
+    # n_terms_range = list(range(50, 501, 50))
     # n_terms_range = list(range(250, 2001, 250))
     # n_terms_range = list(range(10, 101, 10))
     print(n_terms_range)
@@ -116,7 +119,7 @@ if __name__ == '__main__':
         wavelength=650,
         permittivity=4,
         lens_subpixel_size=400,
-        n_lens_subpixels=6,
+        n_lens_subpixels=1,
         lens_thickness=400,
         focal_length=4000,
         approx_num_terms_range=n_terms_range
