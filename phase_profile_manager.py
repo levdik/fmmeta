@@ -19,7 +19,7 @@ def _generate_incidence_phase_profile(point, wavelength, inc_phi, inc_theta):
     return phase
 
 
-def _optical_path_to_focal_point(points, focal_point, xy_period=None):
+def optical_path_to_focal_point(points, focal_point, xy_period=None):
     x = points[..., 0]
     y = points[..., 1]
     z = points[..., 2] if np.shape(points)[-1] > 2 else 0
@@ -54,7 +54,7 @@ def generate_target_phase(points, focal_points, wavelength,
     for focal_point in focal_points:
         optical_paths = np.minimum(
             optical_paths,
-            _optical_path_to_focal_point(points, focal_point, xy_period)
+            optical_path_to_focal_point(points, focal_point, xy_period)
         )
 
     incidence_phase = _generate_incidence_phase_profile(points, wavelength, inc_phi=inc_phi, inc_theta=inc_theta)
