@@ -170,7 +170,7 @@ if __name__ == '__main__':
     # print(effs)
 
     a00s = calculate_a00_convergence_data(
-        wavelength=550,
+        wavelength=450,
         permittivity=4,
         lens_subpixel_size=400,
         n_lens_subpixels=8,
