@@ -29,7 +29,7 @@ symmetry_indices = jnp.array([
 
 permittivity = 4
 lens_subpixel_size = 300
-lens_thickness = 500
+lens_thickness = 1000
 focal_length = 4000
 approximate_number_of_terms = 500
 
@@ -48,7 +48,6 @@ def design_by_gradient_descent():
         b = jnp.clip(b, 0, (1 - a) / 2)
         return jnp.stack([a, b])
 
-    print('approx_n_terms', approximate_number_of_terms)
     common_func_prep_kwargs = {
         'permittivity': permittivity,
         'lens_subpixel_size': lens_subpixel_size,
@@ -110,11 +109,11 @@ def design_by_gradient_descent():
 
 
     params = init_params
-    for i in range(3):
+    for i in range(31):
         new_params, optimizer_state, loss, grad = descent_step(params, optimizer_state)
         avg_grad_norm = jnp.linalg.norm(grad) / params.size
         rounded_params = jnp.round(params * lens_subpixel_size).astype(int)
-        print(f"Step {i}: efficiency={-loss:.4f}, a={rounded_params[0]}, b={rounded_params[0]}, |grad|={avg_grad_norm}")
+        print(f"Step {i}: efficiency={-loss:.4f}, a={rounded_params[0]}, b={rounded_params[1]}, |grad|={avg_grad_norm}")
         if avg_grad_norm < 0.001:
             print("Stop on gradient norm criteria")
             break
