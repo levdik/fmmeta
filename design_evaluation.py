@@ -20,10 +20,15 @@ if __name__ == '__main__':
     approximate_number_of_terms = 300
     total_lens_period = lens_subpixel_size * n_lens_subpixels
 
-    n_unique_widths, symmetry_indices = generate_monochromatic_lens_symmetry_indices(n_lens_subpixels=n_lens_subpixels)
+    n_unique_widths, symmetry_indices = generate_monochromatic_lens_symmetry_indices(
+        n_lens_subpixels=n_lens_subpixels,
+        # relative_focal_point_position=(0.5, 0.5)
+        relative_focal_point_position=(0.25, 0.25)
+    )
 
     # unique_widths = jnp.array([257, 234, 221, 196, 159, 86, 197, 158, 89], dtype=float)
-    unique_widths = jnp.array([260, 235, 220, 195, 160, 85, 200, 160, 90])
+    # unique_widths = jnp.array([260, 235, 220, 195, 160, 85, 200, 160, 90])
+    unique_widths = jnp.array([200, 195, 170, 190, 107, 166, 113, 108, 192, 105, 112, 107, 108])
     widths = unique_widths[symmetry_indices]
     print(widths)
 

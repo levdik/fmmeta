@@ -1,5 +1,6 @@
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 
 def _box_filling_map(
@@ -115,11 +116,11 @@ def generate_pillar_center_positions(
         n_lens_subpixels: int
 ):
     full_lens_size = n_lens_subpixels * lens_subpixel_size
-    pillar_centers_x = jnp.linspace(
+    pillar_centers_x = np.linspace(
         -full_lens_size / 2, full_lens_size / 2,
         n_lens_subpixels, endpoint=False
     ) + lens_subpixel_size / 2
-    pillar_centers = jnp.array([(x, y, 0) for x in pillar_centers_x for y in pillar_centers_x])
+    pillar_centers = np.array([(x, y, 0) for x in pillar_centers_x for y in pillar_centers_x])
 
     return pillar_centers
 

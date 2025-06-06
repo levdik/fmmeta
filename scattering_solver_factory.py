@@ -91,14 +91,16 @@ def prepare_lens_pixel_width_to_scattered_amplitudes_function(
     return trans_ref_fourier_amplitudes
 
 
-def prepare_lens_pixel_shapes_to_scattered_amplitudes_function(
+def prepare_shapes_to_amplitudes_function(
         wavelength,
         permittivity,
         lens_subpixel_size,
         n_lens_subpixels,
         lens_thickness,
-        params_to_shapes_function,
-        approximate_number_of_terms
+        approximate_number_of_terms,
+        include_reflection=True,
+        return_basis_indices=False,
+        propagate_transmitted_amps_by_distance=0.
 ):
     total_lens_period = n_lens_subpixels * lens_subpixel_size
 
@@ -128,10 +130,7 @@ def prepare_lens_pixel_shapes_to_scattered_amplitudes_function(
     inc_fwd_amplitude = inc_fwd_amplitude.at[zero_mode_index].set(1.)
     fwd_amplitude = jnp.asarray(inc_fwd_amplitude[..., np.newaxis], dtype=jnp.float32)
 
-    vectorized_params_to_shapes_function = jax.vmap(params_to_shapes_function)
-
-    def trans_ref_fourier_amplitudes(params):
-        shapes = vectorized_params_to_shapes_function(params)
+    def shapes_to_amplitudes_function(shapes):
         permittivity_pattern = generate_lens_permittivity_map(
             shapes=shapes,
             sub_pixel_size=lens_subpixel_size,
@@ -156,21 +155,33 @@ def prepare_lens_pixel_shapes_to_scattered_amplitudes_function(
             backward_amplitude_N_end=fwd_amplitude,
         )
         _, trans_amps = amplitudes_interior[0]
-
-        ref_amps, _ = amplitudes_interior[2]
-        (_, ref_e_y, _), _ = fields.fields_from_wave_amplitudes(
-            forward_amplitude=ref_amps,
-            backward_amplitude=jnp.zeros_like(ref_amps),
-            layer_solve_result=solve_result_ambient
-        )
+        if propagate_transmitted_amps_by_distance != 0:
+            trans_amps = fields.propagate_amplitude(
+                amplitude=trans_amps,
+                distance=propagate_transmitted_amps_by_distance,  # type: ignore[arg-type]
+                layer_solve_result=solve_result_ambient
+            )
         (_, trans_e_y, _), _ = fields.fields_from_wave_amplitudes(
             forward_amplitude=trans_amps,
             backward_amplitude=jnp.zeros_like(trans_amps),
             layer_solve_result=solve_result_ambient
         )
-        trans_ref_propagating_amplitudes = jnp.concatenate([
-            trans_e_y[:n_propagating_waves].flatten(), ref_e_y[:n_propagating_waves].flatten()
-        ])
-        return trans_ref_propagating_amplitudes
 
-    return trans_ref_fourier_amplitudes
+        amplitudes_to_return = trans_e_y[:n_propagating_waves].flatten()
+
+        if include_reflection:
+            ref_amps, _ = amplitudes_interior[2]
+            (_, ref_e_y, _), _ = fields.fields_from_wave_amplitudes(
+                forward_amplitude=ref_amps,
+                backward_amplitude=jnp.zeros_like(ref_amps),
+                layer_solve_result=solve_result_ambient
+            )
+            amplitudes_to_return = jnp.concatenate([
+                amplitudes_to_return, ref_e_y[:n_propagating_waves].flatten()
+            ])
+
+        return amplitudes_to_return
+
+    if return_basis_indices:
+        return shapes_to_amplitudes_function, expansion.basis_coefficients
+    return shapes_to_amplitudes_function

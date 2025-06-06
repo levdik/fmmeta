@@ -12,14 +12,51 @@ from field_postprocessing import make_jit_focusing_efficiency_function
 def generate_monochromatic_lens_symmetry_indices(
         n_lens_subpixels,
         relative_focal_point_position=(0.5, 0.5),
-        tolerance_decimals=6
+        tolerance_decimals=4
 ):
+    return 10, jnp.array([
+        [9, 8, 7, 6, 7, 8, 9],
+        [8, 5, 3, 4, 3, 5, 8],
+        [7, 3, 2, 1, 2, 3, 7],
+        [6, 4, 1, 0, 1, 4, 6],
+        [7, 3, 2, 1, 2, 3, 7],
+        [8, 5, 3, 4, 3, 5, 8],
+        [9, 8, 7, 6, 7, 8, 9]
+    ], dtype=int)
+    # return 10, jnp.array([
+    #     [9, 8, 7, 6, 6, 7, 8, 9],
+    #     [8, 5, 4, 3, 3, 4, 5, 8],
+    #     [7, 4, 2, 1, 1, 2, 4, 7],
+    #     [6, 3, 1, 0, 0, 1, 3, 6],
+    #     [6, 3, 1, 0, 0, 1, 3, 6],
+    #     [7, 4, 2, 1, 1, 2, 4, 7],
+    #     [8, 5, 4, 3, 3, 4, 5, 8],
+    #     [9, 8, 7, 6, 6, 7, 8, 9]
+    # ], dtype=int)
+    # return 15, jnp.array([
+    #     [14, 13, 12, 11, 10, 11, 12, 13, 14],
+    #     [13, 9, 8, 7, 6, 7, 8, 9, 13],
+    #     [12, 8, 5, 4, 3, 4, 5, 8, 12],
+    #     [11, 7, 4, 2, 1, 2, 4, 7, 11],
+    #     [10, 6, 3, 1, 0, 1, 3, 6, 10],
+    #     [11, 7, 4, 2, 1, 2, 4, 7, 11],
+    #     [12, 8, 5, 4, 3, 4, 5, 8, 12],
+    #     [13, 9, 8, 7, 6, 7, 8, 9, 13],
+    #     [14, 13, 12, 11, 10, 11, 12, 13, 14]
+    # ])
+
     single_coordinate_samples = np.linspace(0, 1, n_lens_subpixels)
     x_mesh, y_mesh = np.meshgrid(single_coordinate_samples, single_coordinate_samples)
     x_distances = np.abs(x_mesh - relative_focal_point_position[0])
     y_distances = np.abs(y_mesh - relative_focal_point_position[1])
-    distances = x_distances ** 2 + y_distances ** 2
-    unique_values, symmetry_indices = jnp.unique(np.round(distances, tolerance_decimals), return_inverse=True)
+    # distances = x_distances ** 2 + y_distances ** 2
+    factor = 10 ** tolerance_decimals
+    distances_id = np.round(x_distances * factor).astype(int) + np.round(y_distances * factor).astype(int) * factor
+    # print(distances_id)
+    # exit()
+    # distances_id = np.arange(x_distances.size).reshape(x_distances.shape)
+    # unique_values, symmetry_indices = jnp.unique(np.round(distances, tolerance_decimals), return_inverse=True)
+    unique_values, symmetry_indices = jnp.unique(distances_id, return_inverse=True)
     return len(unique_values), symmetry_indices
 
 
@@ -30,10 +67,13 @@ def prepare_functions_for_optimization(
         n_lens_subpixels,
         lens_thickness,
         focal_length,
-        approximate_number_of_terms
+        approximate_number_of_terms,
+        relative_focal_point_position
 ):
     total_lens_period = n_lens_subpixels * lens_subpixel_size
-    n_unique_widths, symmetry_indices = generate_monochromatic_lens_symmetry_indices(n_lens_subpixels)
+    n_unique_widths, symmetry_indices = generate_monochromatic_lens_symmetry_indices(
+        n_lens_subpixels, relative_focal_point_position=relative_focal_point_position
+    )
 
     primitive_lattice_vectors = basis.LatticeVectors(
         u=total_lens_period * basis.X, v=total_lens_period * basis.Y
@@ -104,7 +144,7 @@ def prepare_functions_for_optimization(
     jit_focal_plane_field_fourier_amplitudes = jax.jit(focal_plane_field_fourier_amplitudes)
     jit_focusing_efficiency_from_amplitudes = make_jit_focusing_efficiency_function(
         basis_indices=propagating_basis_indices,
-        relative_focal_point=(0.5, 0.5)
+        relative_focal_point=relative_focal_point_position
     )
 
     def total_efficiency_from_unique_widths(unique_widths_normalized):
@@ -117,7 +157,7 @@ def prepare_functions_for_optimization(
     return (
         focal_plane_field_fourier_amplitudes,
         total_efficiency_from_unique_widths,
-        n_unique_widths - 1,
+        n_unique_widths,
         propagating_basis_indices
     )
 
@@ -130,6 +170,7 @@ def run_optimization_and_visualize_results():
     lens_thickness = 500
     focal_length = 4000
     approximate_number_of_terms = 300
+    relative_focal_point_position = (0.5, 0.5)
 
     (
         focal_plane_field_fourier_amplitudes,
@@ -144,6 +185,7 @@ def run_optimization_and_visualize_results():
         lens_thickness=lens_thickness,
         focal_length=focal_length,
         approximate_number_of_terms=approximate_number_of_terms,
+        relative_focal_point_position=relative_focal_point_position
     )
 
     def loss_fn(arg):
@@ -153,7 +195,7 @@ def run_optimization_and_visualize_results():
 
     learning_rate = 0.01
     # optimizer = optax.sgd(learning_rate)
-    optimizer = optax.adam(learning_rate, b1=0.5)
+    optimizer = optax.adam(learning_rate, b1=0.9)
 
     x_init = 0.5 * jnp.ones(n_unique_widths)
 
@@ -179,11 +221,13 @@ def run_optimization_and_visualize_results():
         avg_grad_norm = jnp.linalg.norm(grad) / len(x)
         rounded_widths = jnp.round(x * lens_subpixel_size).astype(int)
         print(f"Step {i}: efficiency={-loss:.4f}, widths={rounded_widths}, |grad|={avg_grad_norm}")
-        if avg_grad_norm < 0.01:
+        if avg_grad_norm < 0.001:
             print("Stop on gradient norm criteria")
             break
         x = new_x
 
 
 if __name__ == '__main__':
+    jnp.set_printoptions(linewidth=1000)
+
     run_optimization_and_visualize_results()
