@@ -183,5 +183,5 @@ def prepare_shapes_to_amplitudes_function(
         return amplitudes_to_return
 
     if return_basis_indices:
-        return shapes_to_amplitudes_function, expansion.basis_coefficients
+        return shapes_to_amplitudes_function, expansion.basis_coefficients[:n_propagating_waves]
     return shapes_to_amplitudes_function
