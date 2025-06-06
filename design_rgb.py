@@ -29,12 +29,12 @@ symmetry_indices = jnp.array([
 
 permittivity = 4
 lens_subpixel_size = 300
-lens_thickness = 1000
+# lens_thickness = 1000
 focal_length = 4000
 approximate_number_of_terms = 500
 
 
-def design_by_gradient_descent():
+def design_by_gradient_descent(lens_thickness):
     def params_to_shapes(params):
         a_unique, b_unique = params * lens_subpixel_size
         a, b = a_unique[symmetry_indices], b_unique[symmetry_indices]
@@ -93,8 +93,7 @@ def design_by_gradient_descent():
                               + blue_focusing_efficiency_function(params)) / 3
         return -overall_efficiency
 
-    learning_rate = 0.01
-    optimizer = optax.adam(learning_rate)
+    optimizer = optax.adam(learning_rate=0.01, b1=0.5)
 
     init_params = jnp.stack([jnp.ones(n_unique_shapes) / 3, jnp.ones(n_unique_shapes) / 6])
     optimizer_state = optimizer.init(init_params)
@@ -123,4 +122,4 @@ def design_by_gradient_descent():
 if __name__ == '__main__':
     jnp.set_printoptions(linewidth=1000)
 
-    design_by_gradient_descent()
+    design_by_gradient_descent(1000)
