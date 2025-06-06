@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from fmmax import basis, fmm, fields, scattering
-
+from scattering_solver_factory import prepare_shapes_to_amplitudes_function
 from lens_permittivity_profile_generator import generate_lens_permittivity_map
 from field_postprocessing import calculate_focusing_efficiency
 
@@ -108,27 +108,81 @@ def calculate_lens_efficiency_convergence_data(
     return convergence_data
 
 
+def calculate_a00_convergence_data(
+        wavelength,
+        permittivity,
+        lens_subpixel_size,
+        n_lens_subpixels,
+        lens_thickness,
+        focal_length,
+        approx_num_terms_range
+):
+    convergence_data = []
+
+    a = jnp.ones([n_lens_subpixels, n_lens_subpixels]) / 3
+    b = a / 2
+    rngs_key_a, rngs_key_b = jax.random.split(jax.random.key(0))
+    shapes = jnp.stack([
+        a + 0.1 * jax.random.uniform(rngs_key_a, shape=a.shape),
+        b + 0.05 * jax.random.uniform(rngs_key_b, shape=b.shape),
+        jnp.zeros_like(a),
+        jnp.zeros_like(a)
+    ], axis=-1)
+    shapes *= lens_subpixel_size
+
+    for approximate_number_of_terms in approx_num_terms_range:
+        common_func_prep_kwargs = {
+            'permittivity': permittivity,
+            'lens_subpixel_size': lens_subpixel_size,
+            'n_lens_subpixels': n_lens_subpixels,
+            'lens_thickness': lens_thickness,
+            'approximate_number_of_terms': approximate_number_of_terms,
+            'include_reflection': False,
+            'return_basis_indices': True,
+            'propagate_transmitted_amps_by_distance': focal_length
+        }
+
+        shapes_to_amps_function, basis_indices = prepare_shapes_to_amplitudes_function(
+            wavelength=wavelength, **common_func_prep_kwargs)
+        a00 = complex(shapes_to_amps_function(shapes)[0])
+        print(approximate_number_of_terms, a00)
+        convergence_data.append(a00)
+    return convergence_data
+
+
 if __name__ == '__main__':
-    n_terms_range = list(range(1, 10, 1))
+    # n_terms_range = list(range(1, 10, 1))
     # n_terms_range = list(range(50, 501, 50))
     # n_terms_range = list(range(250, 2001, 250))
     # n_terms_range = list(range(10, 101, 10))
+    n_terms_range = list(range(300, 1001, 50))
     print(n_terms_range)
 
-    effs = calculate_lens_efficiency_convergence_data(
-        wavelength=650,
+    # effs = calculate_lens_efficiency_convergence_data(
+    #     wavelength=650,
+    #     permittivity=4,
+    #     lens_subpixel_size=400,
+    #     n_lens_subpixels=1,
+    #     lens_thickness=400,
+    #     focal_length=4000,
+    #     approx_num_terms_range=n_terms_range
+    # )
+    # print(effs)
+
+    a00s = calculate_a00_convergence_data(
+        wavelength=550,
         permittivity=4,
         lens_subpixel_size=400,
-        n_lens_subpixels=1,
+        n_lens_subpixels=8,
         lens_thickness=400,
         focal_length=4000,
         approx_num_terms_range=n_terms_range
     )
+    print(a00s)
 
-    print(effs)
-
-    effs = np.array(effs)
-    plt.plot(n_terms_range[1:], np.abs(effs[1:] - effs[:-1]), '-o')
+    # data = np.array(effs)
+    data = np.array(a00s)
+    plt.plot(n_terms_range[1:], np.abs(data[1:] - data[:-1]), '-o')
     plt.yscale('log')
     plt.gray()
     plt.show()

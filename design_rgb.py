@@ -31,7 +31,7 @@ permittivity = 4
 lens_subpixel_size = 300
 lens_thickness = 500
 focal_length = 4000
-approximate_number_of_terms = 300  # TODO: check convergence and increase
+approximate_number_of_terms = 500
 
 
 def design_by_gradient_descent():
@@ -48,35 +48,51 @@ def design_by_gradient_descent():
         b = jnp.clip(b, 0, (1 - a) / 2)
         return jnp.stack([a, b])
 
-    rgb_focusing_efficiency_functions = []
-    for wavelength, relative_focal_points in zip(wavelengths, bayer_relative_focal_points):
-        relative_focal_point = relative_focal_points[0]
-        shapes_to_amps_function, basis_indices = prepare_shapes_to_amplitudes_function(
-            wavelength=wavelength,
-            permittivity=permittivity,
-            lens_subpixel_size=lens_subpixel_size,
-            n_lens_subpixels=n_lens_subpixels,
-            lens_thickness=lens_thickness,
-            approximate_number_of_terms=approximate_number_of_terms,
-            include_reflection=False,
-            return_basis_indices=True,
-            propagate_transmitted_amps_by_distance=focal_length
-        )
+    print('approx_n_terms', approximate_number_of_terms)
+    common_func_prep_kwargs = {
+        'permittivity': permittivity,
+        'lens_subpixel_size': lens_subpixel_size,
+        'n_lens_subpixels': n_lens_subpixels,
+        'lens_thickness': lens_thickness,
+        'approximate_number_of_terms': approximate_number_of_terms,
+        'include_reflection': False,
+        'return_basis_indices': True,
+        'propagate_transmitted_amps_by_distance': focal_length
+    }
 
-        def focusing_efficiency_function(params):
-            shapes = params_to_shapes(params)
-            focal_plane_amps = shapes_to_amps_function(shapes)
-            efficiency = calculate_focusing_efficiency(focal_plane_amps, basis_indices, relative_focal_point)
-            efficiency *= len(relative_focal_points)
-            return efficiency
+    red_shapes_to_amps_function, red_basis_indices = prepare_shapes_to_amplitudes_function(
+        wavelength=wavelengths[0], **common_func_prep_kwargs)
+    green_shapes_to_amps_function, green_basis_indices = prepare_shapes_to_amplitudes_function(
+        wavelength=wavelengths[1], **common_func_prep_kwargs)
+    blue_shapes_to_amps_function, blue_basis_indices = prepare_shapes_to_amplitudes_function(
+        wavelength=wavelengths[2], **common_func_prep_kwargs)
 
-        rgb_focusing_efficiency_functions.append(focusing_efficiency_function)
+    def red_focusing_efficiency_function(params):
+        shapes = params_to_shapes(params)
+        focal_plane_amps = red_shapes_to_amps_function(shapes)
+        efficiency = calculate_focusing_efficiency(
+            focal_plane_amps, red_basis_indices, bayer_relative_focal_points[0][0])
+        return efficiency
+
+    def green_focusing_efficiency_function(params):
+        shapes = params_to_shapes(params)
+        focal_plane_amps = green_shapes_to_amps_function(shapes)
+        efficiency = calculate_focusing_efficiency(
+            focal_plane_amps, green_basis_indices, bayer_relative_focal_points[1][0])
+        return efficiency
+
+    def blue_focusing_efficiency_function(params):
+        shapes = params_to_shapes(params)
+        focal_plane_amps = blue_shapes_to_amps_function(shapes)
+        efficiency = calculate_focusing_efficiency(
+            focal_plane_amps, blue_basis_indices, bayer_relative_focal_points[2][0])
+        return efficiency
 
     def loss_function(params):
-        return -sum([
-            efficiency_function(params)
-            for efficiency_function in rgb_focusing_efficiency_functions
-        ])
+        overall_efficiency = (red_focusing_efficiency_function(params)
+                              + green_focusing_efficiency_function(params)
+                              + blue_focusing_efficiency_function(params)) / 3
+        return -overall_efficiency
 
     learning_rate = 0.01
     optimizer = optax.adam(learning_rate)
@@ -94,7 +110,7 @@ def design_by_gradient_descent():
 
 
     params = init_params
-    for i in range(100):
+    for i in range(3):
         new_params, optimizer_state, loss, grad = descent_step(params, optimizer_state)
         avg_grad_norm = jnp.linalg.norm(grad) / params.size
         rounded_params = jnp.round(params * lens_subpixel_size).astype(int)
