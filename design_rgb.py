@@ -69,23 +69,26 @@ def design_by_gradient_descent(lens_thickness):
     def red_focusing_efficiency_function(params):
         shapes = params_to_shapes(params)
         focal_plane_amps = red_shapes_to_amps_function(shapes)
-        efficiency = calculate_focusing_efficiency(
+        focusing_efficiency = calculate_focusing_efficiency(
             focal_plane_amps, red_basis_indices, bayer_relative_focal_points[0][0])
-        return efficiency
+        transmission_efficiency = jnp.sum(jnp.abs(focal_plane_amps) ** 2)
+        return focusing_efficiency * transmission_efficiency
 
     def green_focusing_efficiency_function(params):
         shapes = params_to_shapes(params)
         focal_plane_amps = green_shapes_to_amps_function(shapes)
-        efficiency = calculate_focusing_efficiency(
+        focusing_efficiency = calculate_focusing_efficiency(
             focal_plane_amps, green_basis_indices, bayer_relative_focal_points[1][0])
-        return efficiency
+        transmission_efficiency = jnp.sum(jnp.abs(focal_plane_amps) ** 2)
+        return focusing_efficiency * transmission_efficiency
 
     def blue_focusing_efficiency_function(params):
         shapes = params_to_shapes(params)
         focal_plane_amps = blue_shapes_to_amps_function(shapes)
-        efficiency = calculate_focusing_efficiency(
+        focusing_efficiency = calculate_focusing_efficiency(
             focal_plane_amps, blue_basis_indices, bayer_relative_focal_points[2][0])
-        return efficiency
+        transmission_efficiency = jnp.sum(jnp.abs(focal_plane_amps) ** 2)
+        return focusing_efficiency * transmission_efficiency
 
     def loss_function(params):
         overall_efficiency = (red_focusing_efficiency_function(params)
