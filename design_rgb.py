@@ -77,7 +77,7 @@ def design_by_gradient_descent(lens_thickness):
     def green_focusing_efficiency_function(params):
         shapes = params_to_shapes(params)
         focal_plane_amps = green_shapes_to_amps_function(shapes)
-        focusing_efficiency = calculate_focusing_efficiency(
+        focusing_efficiency = 2 * calculate_focusing_efficiency(
             focal_plane_amps, green_basis_indices, bayer_relative_focal_points[1][0])
         transmission_efficiency = jnp.sum(jnp.abs(focal_plane_amps) ** 2)
         return focusing_efficiency * transmission_efficiency
@@ -93,7 +93,7 @@ def design_by_gradient_descent(lens_thickness):
     def loss_function(params):
         overall_efficiency = (red_focusing_efficiency_function(params)
                               + green_focusing_efficiency_function(params)
-                              + blue_focusing_efficiency_function(params)) / 3
+                              + blue_focusing_efficiency_function(params)) / 4
         return -overall_efficiency
 
     optimizer = optax.adam(learning_rate=0.01, b1=0.5)
