@@ -109,8 +109,8 @@ def train_multicolor_merging_model():
     vectorized_params_loss_function = jax.vmap(single_params_loss_function)
 
     learning_rate = 1e-3
-    batch_size = 100
-    n_epochs = 1000
+    batch_size = 10
+    n_epochs = 3
     optimizer = nnx.Optimizer(model, optax.adam(learning_rate))
     rng_key = jax.random.key(0)
 
@@ -129,15 +129,16 @@ def train_multicolor_merging_model():
     for epoch in range(n_epochs):
         rng_key, rng_base_params_subkey, rng_variation_magnitude_subkey = jax.random.split(rng_key, num=3)
         base_params = jax.random.uniform(rng_base_params_subkey, shape=(batch_size, n_lens_subpixels, n_lens_subpixels))
-        variation_magnitude = jax.random.normal(rng_variation_magnitude_subkey, shape=(batch_size,))
+        variation_magnitude = jnp.abs(jax.random.normal(rng_variation_magnitude_subkey, shape=(batch_size,)))
         multicolored_params = []
         for i in range(len(wavelengths)):
             rng_key, rng_subkey = jax.random.split(rng_key)
             color_specific_params = (
                     base_params
-                    + jax.random.uniform(rng_subkey, shape=base_params.shape)
-                    * variation_magnitude[:, jnp.newaxis, jnp.newaxis]
+                    + jax.random.uniform(rng_subkey, shape=base_params.shape, minval=0.5, maxval=0.5)
+                    * 0.5 * variation_magnitude[:, jnp.newaxis, jnp.newaxis]
             )
+            color_specific_params = jnp.clip(color_specific_params, 0., 1.)
             multicolored_params.append(color_specific_params)
         current_loss = train_step(model, optimizer, *multicolored_params)
         print(epoch, current_loss, sep='\t')
