@@ -126,6 +126,8 @@ def train_multicolor_merging_model():
         optimizer.update(grads)
         return loss
 
+    min_loss = 1000.
+
     for epoch in range(n_epochs):
         rng_key, rng_base_params_subkey, rng_variation_magnitude_subkey = jax.random.split(rng_key, num=3)
         base_params = jax.random.uniform(rng_base_params_subkey, shape=(batch_size, n_lens_subpixels, n_lens_subpixels))
