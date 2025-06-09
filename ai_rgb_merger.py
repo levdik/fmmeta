@@ -3,6 +3,8 @@ import jax.numpy as jnp
 from flax import nnx
 import optax
 
+import pickle
+
 from scattering_solver_factory import prepare_shapes_to_amplitudes_function
 
 
@@ -44,6 +46,29 @@ class MulticolorLensMerger(nnx.Module):
         output_lens_params = x.reshape(
             batch_size, self.n_pillar_params_out, self.n_pillars_per_side, self.n_pillars_per_side)
         return jnp.squeeze(output_lens_params)
+
+    def save(self, filename):
+        _, state = nnx.split(self)
+        with open(filename, 'wb') as f:
+            pickle.dump(state, f)
+
+    @staticmethod
+    def load(
+            filename: str,
+            n_colors, n_pillars_per_side, hidden_layer_dims, rngs,
+            n_pillar_params_in=1, n_pillar_params_out=2
+    ):
+        abstract_model = nnx.eval_shape(
+            lambda: MulticolorLensMerger(
+                n_colors, n_pillars_per_side, hidden_layer_dims,
+                nnx.Rngs(0), n_pillar_params_in=1, n_pillar_params_out=2
+            )
+        )
+        graph_def, abstract_state = nnx.split(abstract_model)
+        with open(filename, 'rb') as f:
+            state_restored = pickle.load(f)
+        model = nnx.merge(graph_def, state_restored)
+        return model
 
 
 def train_multicolor_merging_model():
@@ -109,8 +134,8 @@ def train_multicolor_merging_model():
     vectorized_params_loss_function = jax.vmap(single_params_loss_function)
 
     learning_rate = 1e-3
-    batch_size = 10
-    n_epochs = 3
+    batch_size = 32
+    n_epochs = 300
     optimizer = nnx.Optimizer(model, optax.adam(learning_rate))
     rng_key = jax.random.key(0)
 
@@ -144,6 +169,9 @@ def train_multicolor_merging_model():
             multicolored_params.append(color_specific_params)
         current_loss = train_step(model, optimizer, *multicolored_params)
         print(epoch, current_loss, sep='\t')
+        if current_loss < min_loss:
+            min_loss = current_loss
+            model.save('ai_models/rgb_merger_intermediate.pkl')
 
 
 if __name__ == '__main__':
