@@ -57,7 +57,7 @@ def train_multicolor_merging_model():
     model = MulticolorLensMerger(
         n_colors=len(wavelengths),
         n_pillars_per_side=n_lens_subpixels,
-        hidden_layer_dims=[],
+        hidden_layer_dims=[128, 128, 128],
         rngs=nnx.Rngs(0)
     )
 
