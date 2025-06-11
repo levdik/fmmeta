@@ -240,17 +240,28 @@ if __name__ == '__main__':
     #     lens_thickness=1000
     # )
 
-    print('Wavelength: ', end='')
-    wavelength = int(input())
-    print('Inner period: ', end='')
-    lens_subpixel_size = int(input())
-    print('Start descent with parameters:')
+    import sys
+
+    if len(sys.argv) >= 3:
+        wavelength = int(sys.argv[1])
+        lens_subpixel_size = int(sys.argv[2])
+    else:
+        print('Wavelength: ', end='')
+        wavelength = int(input())
+        print('Inner period: ', end='')
+        lens_subpixel_size = int(input())
+
+    print('Start parameter sweep with parameters:')
     print('Wavelength:', wavelength)
     print('Inner period:', lens_subpixel_size)
 
-    run_optimization_and_visualize_results(
-        wavelength=wavelength,
-        n_lens_subpixels=8,
-        lens_subpixel_size=lens_subpixel_size,
-        lens_thickness=1000
-    )
+    print('STOP')
+    exit()
+
+    for lens_thickness in range(200, 2000, 100):
+        run_optimization_and_visualize_results(
+            wavelength=wavelength,
+            n_lens_subpixels=8,
+            lens_subpixel_size=lens_subpixel_size,
+            lens_thickness=lens_thickness
+        )
