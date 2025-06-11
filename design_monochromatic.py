@@ -255,9 +255,6 @@ if __name__ == '__main__':
     print('Wavelength:', wavelength)
     print('Inner period:', lens_subpixel_size)
 
-    print('STOP')
-    exit()
-
     for lens_thickness in range(200, 2000, 100):
         run_optimization_and_visualize_results(
             wavelength=wavelength,
