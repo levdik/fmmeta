@@ -14,25 +14,29 @@ def generate_monochromatic_lens_symmetry_indices(
         relative_focal_point_position=(0.5, 0.5),
         tolerance_decimals=4
 ):
-    return 10, jnp.array([
-        [9, 8, 7, 6, 7, 8, 9],
-        [8, 5, 3, 4, 3, 5, 8],
-        [7, 3, 2, 1, 2, 3, 7],
-        [6, 4, 1, 0, 1, 4, 6],
-        [7, 3, 2, 1, 2, 3, 7],
-        [8, 5, 3, 4, 3, 5, 8],
-        [9, 8, 7, 6, 7, 8, 9]
-    ], dtype=int)
-    # return 10, jnp.array([
-    #     [9, 8, 7, 6, 6, 7, 8, 9],
-    #     [8, 5, 4, 3, 3, 4, 5, 8],
-    #     [7, 4, 2, 1, 1, 2, 4, 7],
-    #     [6, 3, 1, 0, 0, 1, 3, 6],
-    #     [6, 3, 1, 0, 0, 1, 3, 6],
-    #     [7, 4, 2, 1, 1, 2, 4, 7],
-    #     [8, 5, 4, 3, 3, 4, 5, 8],
-    #     [9, 8, 7, 6, 6, 7, 8, 9]
-    # ], dtype=int)
+    if n_lens_subpixels == 7:
+        return 10, jnp.array([
+            [9, 8, 7, 6, 7, 8, 9],
+            [8, 5, 3, 4, 3, 5, 8],
+            [7, 3, 2, 1, 2, 3, 7],
+            [6, 4, 1, 0, 1, 4, 6],
+            [7, 3, 2, 1, 2, 3, 7],
+            [8, 5, 3, 4, 3, 5, 8],
+            [9, 8, 7, 6, 7, 8, 9]
+        ], dtype=int)
+    if n_lens_subpixels == 8:
+        return 10, jnp.array([
+            [9, 8, 7, 6, 6, 7, 8, 9],
+            [8, 5, 4, 3, 3, 4, 5, 8],
+            [7, 4, 2, 1, 1, 2, 4, 7],
+            [6, 3, 1, 0, 0, 1, 3, 6],
+            [6, 3, 1, 0, 0, 1, 3, 6],
+            [7, 4, 2, 1, 1, 2, 4, 7],
+            [8, 5, 4, 3, 3, 4, 5, 8],
+            [9, 8, 7, 6, 6, 7, 8, 9]
+        ], dtype=int)
+    else:
+        raise NotImplementedError(f'Not implemented manual symmetry for lens of size {n_lens_subpixels}')
     # return 15, jnp.array([
     #     [14, 13, 12, 11, 10, 11, 12, 13, 14],
     #     [13, 9, 8, 7, 6, 7, 8, 9, 13],
@@ -162,14 +166,10 @@ def prepare_functions_for_optimization(
     )
 
 
-def run_optimization_and_visualize_results():
-    wavelength = 650
+def run_optimization_and_visualize_results(wavelength, n_lens_subpixels, lens_subpixel_size, lens_thickness):
     permittivity = 4
-    lens_subpixel_size = 300
-    n_lens_subpixels = 7
-    lens_thickness = 500
     focal_length = 4000
-    approximate_number_of_terms = 300
+    approximate_number_of_terms = 500
     relative_focal_point_position = (0.5, 0.5)
 
     (
@@ -216,18 +216,41 @@ def run_optimization_and_visualize_results():
         return x, opt_state, loss, grad
 
     x = x_init
+    max_eff = 0.
     for i in range(100):
         new_x, opt_state, loss, grad = step(x, opt_state)
         avg_grad_norm = jnp.linalg.norm(grad) / len(x)
         rounded_widths = jnp.round(x * lens_subpixel_size).astype(int)
+        max_eff = max(-loss, max_eff)
         print(f"Step {i}: efficiency={-loss:.4f}, widths={rounded_widths}, |grad|={avg_grad_norm}")
         if avg_grad_norm < 0.001:
             print("Stop on gradient norm criteria")
             break
         x = new_x
+    print('Max efficiency:', max_eff)
 
 
 if __name__ == '__main__':
     jnp.set_printoptions(linewidth=1000)
 
-    run_optimization_and_visualize_results()
+    # run_optimization_and_visualize_results(
+    #     wavelength=650,
+    #     n_lens_subpixels=8,
+    #     lens_subpixel_size=400,
+    #     lens_thickness=1000
+    # )
+
+    print('Wavelength: ', end='')
+    wavelength = int(input())
+    print('Inner period: ', end='')
+    lens_subpixel_size = int(input())
+    print('Start descent with parameters:')
+    print('Wavelength:', wavelength)
+    print('Inner period:', lens_subpixel_size)
+
+    run_optimization_and_visualize_results(
+        wavelength=wavelength,
+        n_lens_subpixels=8,
+        lens_subpixel_size=lens_subpixel_size,
+        lens_thickness=1000
+    )
