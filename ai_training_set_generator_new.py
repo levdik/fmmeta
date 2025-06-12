@@ -3,6 +3,8 @@ import jax.numpy as jnp
 
 from scattering_solver_factory import prepare_lens_pixel_width_to_scattered_amplitudes_function
 
+import sys
+
 
 def calculate_and_save_training_set(
         wavelength, n_lens_subpixels, lens_subpixel_size, lens_thickness,
@@ -47,12 +49,13 @@ def calculate_and_save_training_set(
 
 
 if __name__ == "__main__":
+    print('Start computing batch', sys.argv[1])
     calculate_and_save_training_set(
         wavelength=650,
         n_lens_subpixels=8,
         lens_subpixel_size=300,
-        lens_thickness=1000,
-        save_filename='ai_training_data/test.npz',
-        batch_size=3,
-        n_batches=2,
+        lens_thickness=800,
+        save_filename=f'ai_training_data/red_8x8_th800_p300_batch{sys.argv[1]}.npz',
+        batch_size=100,
+        n_batches=100,
     )
