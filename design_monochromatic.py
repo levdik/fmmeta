@@ -14,6 +14,13 @@ def generate_monochromatic_lens_symmetry_indices(
         relative_focal_point_position=(0.5, 0.5),
         tolerance_decimals=4
 ):
+    if n_lens_subpixels == 4:
+        return 3, jnp.array([
+            [2, 1, 1, 2],
+            [1, 0, 0, 1],
+            [1, 0, 0, 1],
+            [2, 1, 1, 2],
+        ], dtype=int)
     if n_lens_subpixels == 7:
         return 10, jnp.array([
             [9, 8, 7, 6, 7, 8, 9],
@@ -233,32 +240,32 @@ def run_optimization_and_visualize_results(wavelength, n_lens_subpixels, lens_su
 if __name__ == '__main__':
     jnp.set_printoptions(linewidth=1000)
 
-    # run_optimization_and_visualize_results(
-    #     wavelength=650,
-    #     n_lens_subpixels=8,
-    #     lens_subpixel_size=400,
-    #     lens_thickness=1000
-    # )
+    run_optimization_and_visualize_results(
+        wavelength=650,
+        n_lens_subpixels=4,
+        lens_subpixel_size=300,
+        lens_thickness=800
+    )
 
-    import sys
-
-    if len(sys.argv) >= 3:
-        wavelength = int(sys.argv[1])
-        lens_subpixel_size = int(sys.argv[2])
-    else:
-        print('Wavelength: ', end='')
-        wavelength = int(input())
-        print('Inner period: ', end='')
-        lens_subpixel_size = int(input())
-
-    print('Start parameter sweep with parameters:')
-    print('Wavelength:', wavelength)
-    print('Inner period:', lens_subpixel_size)
-
-    for lens_thickness in range(200, 2000, 100):
-        run_optimization_and_visualize_results(
-            wavelength=wavelength,
-            n_lens_subpixels=8,
-            lens_subpixel_size=lens_subpixel_size,
-            lens_thickness=lens_thickness
-        )
+    # import sys
+    #
+    # if len(sys.argv) >= 3:
+    #     wavelength = int(sys.argv[1])
+    #     lens_subpixel_size = int(sys.argv[2])
+    # else:
+    #     print('Wavelength: ', end='')
+    #     wavelength = int(input())
+    #     print('Inner period: ', end='')
+    #     lens_subpixel_size = int(input())
+    #
+    # print('Start parameter sweep with parameters:')
+    # print('Wavelength:', wavelength)
+    # print('Inner period:', lens_subpixel_size)
+    #
+    # for lens_thickness in range(200, 2000, 100):
+    #     run_optimization_and_visualize_results(
+    #         wavelength=wavelength,
+    #         n_lens_subpixels=8,
+    #         lens_subpixel_size=lens_subpixel_size,
+    #         lens_thickness=lens_thickness
+    #     )

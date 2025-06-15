@@ -14,9 +14,6 @@ def prepare_lens_pixel_width_to_scattered_amplitudes_function(
         lens_thickness,
         approximate_number_of_terms
 ):
-    # TODO: make universal to accept shapes (of different kinds)
-    # TODO: possibly you can pass params_to_shapes function
-    # TODO: this would also take care of symmetry_indices
     total_lens_period = n_lens_subpixels * lens_subpixel_size
 
     primitive_lattice_vectors = basis.LatticeVectors(
@@ -71,8 +68,8 @@ def prepare_lens_pixel_width_to_scattered_amplitudes_function(
             backward_amplitude_N_end=fwd_amplitude,
         )
         _, trans_amps = amplitudes_interior[0]
-
         ref_amps, _ = amplitudes_interior[2]
+
         (_, ref_e_y, _), _ = fields.fields_from_wave_amplitudes(
             forward_amplitude=ref_amps,
             backward_amplitude=jnp.zeros_like(ref_amps),

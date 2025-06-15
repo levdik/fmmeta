@@ -77,7 +77,7 @@ def generate_pillar_permittivity_map(
         map_size: float,
         permittivity: float,
         permittivity_ambience: float = 1.,
-        n_pixels: int = 100
+        n_pixels: int = 500
 ):
     relative_shape = shape / map_size
     pillar_filling = _cross_with_hole_filling_map(relative_shape, n_pixels)
@@ -96,7 +96,7 @@ def generate_lens_permittivity_map(
         n_lens_subpixels: int,
         permittivity_pillar,
         permittivity_ambience=1.,
-        n_samples_per_subpixel=100
+        n_samples_per_subpixel=500
 ) -> jnp.ndarray:
     shapes = shapes.reshape(-1, 4)
     permittivity_map_blocks_flat = _vmap_generate_pillar_permittivity_map(

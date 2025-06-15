@@ -9,27 +9,37 @@ from field_postprocessing import calculate_focusing_efficiency
 color_names = ('red', 'green', 'blue')
 wavelengths = (650, 550, 450)
 bayer_relative_focal_points = [
-    ((0.25, 0.25),),
-    ((0.25, 0.75), (0.75, 0.25)),
-    ((0.75, 0.75),)
+    ((0.25, 0.75),),
+    ((0.25, 0.25), (0.75, 0.75)),
+    ((0.75, 0.25),)
 ]
 
 n_lens_subpixels = 8
-n_unique_shapes = 9
+# n_unique_shapes = 9
+# symmetry_indices = jnp.array([
+#     [5, 8, 8, 5, 4, 7, 7, 4],
+#     [8, 2, 2, 8, 7, 1, 1, 7],
+#     [8, 2, 2, 8, 7, 1, 1, 7],
+#     [5, 8, 8, 5, 4, 7, 7, 4],
+#     [3, 6, 6, 3, 5, 8, 8, 5],
+#     [6, 0, 0, 6, 8, 2, 2, 8],
+#     [6, 0, 0, 6, 8, 2, 2, 8],
+#     [3, 6, 6, 3, 5, 8, 8, 5]
+# ])
+n_unique_shapes = 10
 symmetry_indices = jnp.array([
-    [5, 8, 8, 5, 4, 7, 7, 4],
-    [8, 2, 2, 8, 7, 1, 1, 7],
-    [8, 2, 2, 8, 7, 1, 1, 7],
-    [5, 8, 8, 5, 4, 7, 7, 4],
-    [3, 6, 6, 3, 5, 8, 8, 5],
-    [6, 0, 0, 6, 8, 2, 2, 8],
-    [6, 0, 0, 6, 8, 2, 2, 8],
-    [3, 6, 6, 3, 5, 8, 8, 5]
+    [1, 2, 2, 1, 8, 9, 9, 8],
+    [3, 0, 0, 3, 9, 7, 7, 9],
+    [3, 0, 0, 3, 9, 7, 7, 9],
+    [1, 2, 2, 1, 8, 9, 9, 8],
+    [5, 6, 6, 5, 1, 2, 2, 1],
+    [6, 4, 4, 6, 3, 0, 0, 3],
+    [6, 4, 4, 6, 3, 0, 0, 3],
+    [5, 6, 6, 5, 1, 2, 2, 1]
 ])
 
 permittivity = 4
 lens_subpixel_size = 300
-# lens_thickness = 1000
 focal_length = 4000
 approximate_number_of_terms = 500
 
@@ -72,7 +82,9 @@ def design_by_gradient_descent(lens_thickness):
         focusing_efficiency = calculate_focusing_efficiency(
             focal_plane_amps, red_basis_indices, bayer_relative_focal_points[0][0])
         transmission_efficiency = jnp.sum(jnp.abs(focal_plane_amps) ** 2)
-        return focusing_efficiency * transmission_efficiency
+        total_efficiency = transmission_efficiency * focusing_efficiency
+        total_efficiency_normalized = (total_efficiency - 1 / 4) * 4 / 3
+        return total_efficiency_normalized
 
     def green_focusing_efficiency_function(params):
         shapes = params_to_shapes(params)
@@ -80,7 +92,9 @@ def design_by_gradient_descent(lens_thickness):
         focusing_efficiency = 2 * calculate_focusing_efficiency(
             focal_plane_amps, green_basis_indices, bayer_relative_focal_points[1][0])
         transmission_efficiency = jnp.sum(jnp.abs(focal_plane_amps) ** 2)
-        return focusing_efficiency * transmission_efficiency
+        total_efficiency = transmission_efficiency * focusing_efficiency
+        total_efficiency_normalized = (total_efficiency - 1 / 2) * 2
+        return total_efficiency_normalized
 
     def blue_focusing_efficiency_function(params):
         shapes = params_to_shapes(params)
@@ -88,17 +102,22 @@ def design_by_gradient_descent(lens_thickness):
         focusing_efficiency = calculate_focusing_efficiency(
             focal_plane_amps, blue_basis_indices, bayer_relative_focal_points[2][0])
         transmission_efficiency = jnp.sum(jnp.abs(focal_plane_amps) ** 2)
-        return focusing_efficiency * transmission_efficiency
+        total_efficiency = transmission_efficiency * focusing_efficiency
+        total_efficiency_normalized = (total_efficiency - 1 / 4) * 4 / 3
+        return total_efficiency_normalized
 
     def loss_function(params):
         overall_efficiency = (red_focusing_efficiency_function(params)
                               + green_focusing_efficiency_function(params)
-                              + blue_focusing_efficiency_function(params)) / 4
+                              + blue_focusing_efficiency_function(params)) / 3
         return -overall_efficiency
 
-    optimizer = optax.adam(learning_rate=0.01, b1=0.5)
+    optimizer = optax.adam(learning_rate=1e-2, b1=0.5)
 
-    init_params = jnp.stack([jnp.ones(n_unique_shapes) / 3, jnp.ones(n_unique_shapes) / 6])
+    init_params = jnp.stack([jnp.ones(n_unique_shapes) / 2.5, jnp.ones(n_unique_shapes) / 10])
+    random_variation = jax.random.uniform(jax.random.key(42), shape=init_params.shape, minval=-0.05, maxval=0.05)
+    random_variation = random_variation.at[1].divide(2)
+    init_params += random_variation
     optimizer_state = optimizer.init(init_params)
 
     @jax.jit
@@ -111,7 +130,7 @@ def design_by_gradient_descent(lens_thickness):
 
 
     params = init_params
-    for i in range(31):
+    for i in range(100):
         new_params, optimizer_state, loss, grad = descent_step(params, optimizer_state)
         avg_grad_norm = jnp.linalg.norm(grad) / params.size
         rounded_params = jnp.round(params * lens_subpixel_size).astype(int)
@@ -125,4 +144,4 @@ def design_by_gradient_descent(lens_thickness):
 if __name__ == '__main__':
     jnp.set_printoptions(linewidth=1000)
 
-    design_by_gradient_descent(1000)
+    design_by_gradient_descent(lens_thickness=1800)

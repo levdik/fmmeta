@@ -198,5 +198,5 @@ if __name__ == '__main__':
 
     # _test_intensity_map()
     # _test_focusing_efficiency()
-    # _calculate_example_max_eff_and_plot()
+    _calculate_example_max_eff_and_plot()
     # _examine_efficiency_eigenvalues()

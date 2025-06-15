@@ -105,6 +105,10 @@ def generate_and_save_training_set():
         lens_thickness=lens_thickness,
         approximate_number_of_terms=approximate_number_of_terms
     )
+
+    # print(f(jnp.zeros((n_lens_subpixels, n_lens_subpixels))))
+    # return
+
     map_f = jax.vmap(f)
 
     n_training_samples = 100
@@ -120,15 +124,20 @@ def generate_and_save_training_set():
 def _examine_training_set():
     jnp.set_printoptions(linewidth=1000)
 
-    data = jnp.load('ai_training_data/red_th500.npz')
+    data = jnp.load('ai_training_data/red_7x7_th500_p300_120k.npz')
     widths = jnp.array(data['widths'])
     amplitudes = jnp.array(data['amps'])
+    print(widths.shape, amplitudes.shape)
+    print(widths)
     n_modes = amplitudes.shape[1] // 2
     trans_amps = amplitudes[:, :n_modes]
     ref_amps = amplitudes[:, n_modes:]
     print('Uniform amp:', jnp.sqrt(1 / n_modes))
     print(jnp.min(jnp.abs(trans_amps), axis=0))
     print(jnp.max(jnp.abs(trans_amps), axis=0))
+
+    powers = jnp.sum(jnp.abs(amplitudes) ** 2, axis=-1)
+    print(jnp.mean(jnp.abs(powers - 1)))
 
 
 if __name__ == "__main__":

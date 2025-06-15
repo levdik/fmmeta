@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 
 from fmmax import basis, fmm, fields, scattering
 from scattering_solver_factory import prepare_shapes_to_amplitudes_function
+from scattering_solver_factory import prepare_lens_pixel_width_to_scattered_amplitudes_function
 from lens_permittivity_profile_generator import generate_lens_permittivity_map
 from field_postprocessing import calculate_focusing_efficiency
 
@@ -150,12 +151,56 @@ def calculate_a00_convergence_data(
     return convergence_data
 
 
+def calculate_power_convergence(
+        wavelength,
+        permittivity,
+        lens_subpixel_size,
+        n_lens_subpixels,
+        lens_thickness,
+        approx_num_terms_range
+):
+    # TODO: compare width.shape=(n_subpixels, n_subpixels) and width.shape=(n_subpixels ** 2,)
+    widths = jax.random.uniform(jax.random.key(42), shape=(n_lens_subpixels ** 2,)) * lens_subpixel_size
+    power_convergence_data = []
+    true_n_terms_data = []
+    for approx_num_terms in approx_num_terms_range:
+        total_lens_period = n_lens_subpixels * lens_subpixel_size
+        primitive_lattice_vectors = basis.LatticeVectors(
+            u=total_lens_period * basis.X, v=total_lens_period * basis.Y
+        )
+        expansion = basis.generate_expansion(
+            primitive_lattice_vectors=primitive_lattice_vectors,
+            approximate_num_terms=approx_num_terms,
+            truncation=basis.Truncation.CIRCULAR,
+        )
+        true_n_terms = len(expansion.basis_coefficients)
+        if true_n_terms in true_n_terms_data:
+            print('already done:', approx_num_terms, true_n_terms)
+            continue
+        true_n_terms_data.append(true_n_terms)
+
+        width_to_amps_f = prepare_lens_pixel_width_to_scattered_amplitudes_function(
+            wavelength=wavelength,
+            permittivity=permittivity,
+            lens_subpixel_size=lens_subpixel_size,
+            n_lens_subpixels=n_lens_subpixels,
+            lens_thickness=lens_thickness,
+            approximate_number_of_terms=approx_num_terms
+        )
+
+        amps = width_to_amps_f(widths)
+        power_convergence_data.append(float(jnp.sum(jnp.abs(amps) ** 2)))
+        print(approx_num_terms, power_convergence_data[-1])
+    return power_convergence_data, true_n_terms_data
+
+
 if __name__ == '__main__':
-    # n_terms_range = list(range(1, 10, 1))
+    # n_terms_range = list(range(2, 10, 1))
     # n_terms_range = list(range(50, 501, 50))
     # n_terms_range = list(range(250, 2001, 250))
     # n_terms_range = list(range(10, 101, 10))
-    n_terms_range = list(range(300, 1001, 50))
+    # n_terms_range = list(range(300, 1001, 50))
+    n_terms_range = list(range(5, 101, 5))
     print(n_terms_range)
 
     # effs = calculate_lens_efficiency_convergence_data(
@@ -170,10 +215,10 @@ if __name__ == '__main__':
     # print(effs)
 
     a00s = calculate_a00_convergence_data(
-        wavelength=450,
+        wavelength=650,
         permittivity=4,
         lens_subpixel_size=400,
-        n_lens_subpixels=8,
+        n_lens_subpixels=4,
         lens_thickness=400,
         focal_length=4000,
         approx_num_terms_range=n_terms_range
@@ -186,3 +231,20 @@ if __name__ == '__main__':
     plt.yscale('log')
     plt.gray()
     plt.show()
+
+    # n_lens_subpixels = 8
+    # powers, true_n_terms = calculate_power_convergence(
+    #     wavelength=650,
+    #     permittivity=4,
+    #     lens_subpixel_size=400,
+    #     n_lens_subpixels=n_lens_subpixels,
+    #     lens_thickness=800,
+    #     approx_num_terms_range=n_terms_range
+    # )
+    # print(powers)
+    # plt.plot(true_n_terms, np.abs(np.array(powers) - 1))
+    # plt.yscale('log')
+    # plt.xlabel('Number of terms')
+    # plt.ylabel('Power error')
+    # plt.title(f'Power convergence, {n_lens_subpixels} pixels')
+    # plt.show()
