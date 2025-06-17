@@ -169,5 +169,5 @@ if __name__ == '__main__':
             batch_size=500,
             n_epochs=1000,
             learning_rate=1e-3,
-            save_filename=f'red_7x7_forward_no_ref_[{d}]x{n}.pkl'
+            save_filename=f'red_7x7_forward_no_ref_[{d}]x{n}'
         )
