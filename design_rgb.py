@@ -15,17 +15,6 @@ bayer_relative_focal_points = [
 ]
 
 n_lens_subpixels = 8
-# n_unique_shapes = 9
-# symmetry_indices = jnp.array([
-#     [5, 8, 8, 5, 4, 7, 7, 4],
-#     [8, 2, 2, 8, 7, 1, 1, 7],
-#     [8, 2, 2, 8, 7, 1, 1, 7],
-#     [5, 8, 8, 5, 4, 7, 7, 4],
-#     [3, 6, 6, 3, 5, 8, 8, 5],
-#     [6, 0, 0, 6, 8, 2, 2, 8],
-#     [6, 0, 0, 6, 8, 2, 2, 8],
-#     [3, 6, 6, 3, 5, 8, 8, 5]
-# ])
 n_unique_shapes = 10
 symmetry_indices = jnp.array([
     [1, 2, 2, 1, 8, 9, 9, 8],

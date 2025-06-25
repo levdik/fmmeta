@@ -7,7 +7,10 @@ from fmmax import basis, fmm, fields, scattering
 
 from lens_permittivity_profile_generator import generate_lens_permittivity_map
 from field_postprocessing import make_jit_focusing_efficiency_function, calculate_focusing_efficiency
-from ai_model_forward import SquarePixelLensScatteringModel
+# from ai_model_forward import SquarePixelLensScatteringModel
+from ai_model_forward_no_ref import SquarePixelLensScatteringModel
+
+from time import time
 
 
 n_unique_widths = 10
@@ -120,10 +123,13 @@ def prepare_functions_for_optimization(
     )
 
 
-def run_optimization_and_visualize_results(wavelength, n_lens_subpixels, lens_subpixel_size, lens_thickness):
+def run_optimization_and_visualize_results(
+        wavelength, n_lens_subpixels, lens_subpixel_size, lens_thickness,
+        n, d
+):
     permittivity = 4
     focal_length = 4000
-    approximate_number_of_terms = 500
+    approximate_number_of_terms = 300
     relative_focal_point_position = (0.5, 0.5)
 
     (
@@ -142,11 +148,10 @@ def run_optimization_and_visualize_results(wavelength, n_lens_subpixels, lens_su
     )
 
     model = SquarePixelLensScatteringModel.load(
-        filename='ai_models/red_7x7_forward.pkl',
+        filename=f'ai_models/red_7x7_forward_no_ref_[{d}]x{n}.pkl',
         n_propagating_waves=37,
         n_lens_params=n_lens_subpixels ** 2,
-        hidden_layer_dims=[1024] * 3,
-        include_transmission=True
+        hidden_layer_dims=[d] * n,
     )
 
     kx, ky = jnp.array(propagating_basis_indices).T * 2 * jnp.pi / (n_lens_subpixels * lens_subpixel_size)
@@ -187,12 +192,13 @@ def run_optimization_and_visualize_results(wavelength, n_lens_subpixels, lens_su
 
     x = x_init
     max_eff = 0.
-    for i in range(100):
+    for i in range(1000):
         new_x, opt_state, loss, grad = step(x, opt_state)
         # true_efficiency = true_total_efficiency_from_unique_widths(x)
         avg_grad_norm = jnp.linalg.norm(grad) / len(x)
         rounded_widths = jnp.round(x * lens_subpixel_size).astype(int)
         max_eff = max(-loss, max_eff)
+        # print(i, -loss, true_efficiency, sep='\t')
         # print(f"Step {i}: model_eff={-loss:.4f}, true_eff={true_efficiency:.4f}, widths={rounded_widths}, |grad|={avg_grad_norm}")
         print(f"Step {i}: model_eff={-loss:.4f}, widths={rounded_widths}, |grad|={avg_grad_norm}")
         if avg_grad_norm < 0.001:
@@ -200,6 +206,7 @@ def run_optimization_and_visualize_results(wavelength, n_lens_subpixels, lens_su
             break
         x = new_x
 
+    print('Max predicted eff:', max_eff)
     true_efficiency = true_total_efficiency_from_unique_widths(x)
     print('True efficiency:', true_efficiency)
 
@@ -211,5 +218,6 @@ if __name__ == '__main__':
         wavelength=650,
         n_lens_subpixels=7,
         lens_subpixel_size=300,
-        lens_thickness=800
+        lens_thickness=500,
+        n=6, d=2048
     )

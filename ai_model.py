@@ -159,8 +159,11 @@ def define_and_train_amplitudes_to_widths_model(hidden_dims):
 
 def define_and_train_amplitudes_to_widths_model_online_inversion(hidden_dims):
     max_width = 300.
-    n_propagating = 37
-    n_lens_params = 7 ** 2
+    # n_propagating = 37
+    # n_pillars = 7
+    n_propagating = 1
+    n_pillars = 1
+    n_lens_params = n_pillars ** 2
     # hidden_dims = [128, 128, 128]
 
     model = SquarePixelLensOptimizingModel(
@@ -176,9 +179,11 @@ def define_and_train_amplitudes_to_widths_model_online_inversion(hidden_dims):
     #         hidden_layer_dims=hidden_dims
     # )
 
-    learning_rate = 1e-3
+    learning_rate = 1e-5
     batch_size = 25
     n_epochs = 1000
+
+    filename = f'red_{n_pillars}x{n_pillars}_p300_th500_online_inversion_{"_".join(list(map(str, hidden_dims)))}_batch{batch_size}'
 
     widths_to_amps_function = prepare_lens_pixel_width_to_scattered_amplitudes_function(
         wavelength=650,
@@ -186,9 +191,9 @@ def define_and_train_amplitudes_to_widths_model_online_inversion(hidden_dims):
         lens_subpixel_size=max_width,
         n_lens_subpixels=int(n_lens_params ** 0.5),
         lens_thickness=500,
-        approximate_number_of_terms=300
+        approximate_number_of_terms=10
     )
-    vmap_f = jax.vmap(jax.jit(widths_to_amps_function))
+    vmap_f = jax.vmap(widths_to_amps_function)
 
     # expansion = basis.generate_expansion(
     #     primitive_lattice_vectors=basis.LatticeVectors(u=basis.X, v=basis.Y),
@@ -233,13 +238,14 @@ def define_and_train_amplitudes_to_widths_model_online_inversion(hidden_dims):
         if current_loss < min_loss:
             min_loss = current_loss
             model.save(
-                f'ai_models/red_7x7_p300_th500_online_inversion_{"_".join(list(map(str, hidden_dims)))}_batch{batch_size}_intermediate.pkl')
+                f'ai_models/{filename}_intermediate.pkl')
     model.save(
-        f'ai_models/red_7x7_p300_th500_online_inversion_{"_".join(list(map(str, hidden_dims)))}_batch{batch_size}.pkl')
+        f'ai_models/{filename}.pkl')
 
 
 if __name__ == '__main__':
     dims = list(map(int, input().split()))
+    print(dims)
 
     # define_and_train_amplitudes_to_widths_model(dims)
     define_and_train_amplitudes_to_widths_model_online_inversion(dims)

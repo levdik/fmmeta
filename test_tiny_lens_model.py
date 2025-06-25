@@ -121,6 +121,11 @@ def train_1x1():
             print(epoch, current_loss, sep='\t')
 
     pred_widths = model(args) * lens_subpixel_size
+    pred_widths = jnp.squeeze(pred_widths)
+
+    for w, pw in zip(widths, pred_widths):
+        print(int(w), float(pw), '\\\\', sep='\t')
+
     plt.plot(widths, pred_widths, '.')
     plt.plot(widths, widths, '--')
     plt.xlabel('True width')
@@ -232,7 +237,15 @@ def train_2x2():
                 model, optimizer, args[batch_start:batch_end], normalized_widths[batch_start:batch_end])
         print(epoch, current_loss, sep='\t')
 
+    print('NN Data before training')
+    for w, pw in zip(single_width_true, single_predicted_width_before_training):
+        print(round(float(w), 5), round(float(pw), 5), '\\\\', sep='\t')
+
+    print('NN Data after training')
     single_predicted_width_after_training = model(amps)[:, width_index_for_testing]
+    for w, pw in zip(single_width_true, single_predicted_width_after_training):
+        print(round(float(w), 5), round(float(pw), 5), '\\\\', sep='\t')
+
     ax[1].plot(single_width_true, single_predicted_width_after_training, '.')
     ax[1].plot([0, 1], [0, 1], '--')
     ax[1].set_title('After training')

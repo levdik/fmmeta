@@ -57,17 +57,34 @@ if __name__ == '__main__':
     # plt.grid()
     # plt.show()
 
+    # effs = []
+    # focal_distances = np.concatenate([np.linspace(0, 10, 101), np.linspace(10, 50, 101)[1:]])
+    #
+    # for i, fd in enumerate(focal_distances):
+    #     if i % 10 == 9:
+    #         progress = i / len(focal_distances)
+    #         print(round(progress * 100), '%')
+    #     effs.append(calculate_max_go_efficiency(period=7 * 300 / 650, focal_distance=fd))
+    #
+    # plt.plot(focal_distances, effs)
+    # plt.xlabel('Focal distance relative to Wavelength')
+    # plt.ylabel('Focusing efficiency given by GO')
+    # plt.grid()
+    # plt.show()
+
     effs = []
-    focal_distances = np.concatenate([np.linspace(0, 10, 101), np.linspace(10, 50, 101)[1:]])
+    focal_distance = 4000 / 650
+    periods = np.linspace(0, 100, 51)[1:]
 
-    for i, fd in enumerate(focal_distances):
-        if i % 10 == 9:
-            progress = i / len(focal_distances)
-            print(round(progress * 100), '%')
-        effs.append(calculate_max_go_efficiency(period=7 * 300 / 650, focal_distance=fd))
+    for i, p in enumerate(periods):
+        effs.append(calculate_max_go_efficiency(period=p, focal_distance=focal_distance))
+        print(i, p, effs[-1])
 
-    plt.plot(focal_distances, effs)
-    plt.xlabel('Focal distance relative to Wavelength')
-    plt.ylabel('Focusing efficiency given by GO')
-    plt.grid()
-    plt.show()
+    for p, e in zip(periods, effs):
+        print(p, e)
+
+    # plt.plot(periods, effs)
+    # plt.xlabel('Focal distance relative to Wavelength')
+    # plt.ylabel('Focusing efficiency given by GO')
+    # plt.grid()
+    # plt.show()

@@ -8,18 +8,43 @@ from fmmax import basis, fmm, fields, scattering
 from lens_permittivity_profile_generator import generate_lens_permittivity_map
 from field_postprocessing import make_jit_focusing_efficiency_function
 
+from time import time
+
 
 def generate_monochromatic_lens_symmetry_indices(
         n_lens_subpixels,
         relative_focal_point_position=(0.5, 0.5),
         tolerance_decimals=4
 ):
+    if n_lens_subpixels == 3:
+        return 3, jnp.array([
+            [2, 1, 2],
+            [1, 0, 1],
+            [2, 1, 2]
+        ])
     if n_lens_subpixels == 4:
         return 3, jnp.array([
             [2, 1, 1, 2],
             [1, 0, 0, 1],
             [1, 0, 0, 1],
-            [2, 1, 1, 2],
+            [2, 1, 1, 2]
+        ])
+    if n_lens_subpixels == 5:
+        return 6, jnp.array([
+            [5, 4, 3, 4, 5],
+            [4, 2, 1, 2, 4],
+            [3, 1, 0, 1, 3],
+            [4, 2, 1, 2, 4],
+            [5, 4, 3, 4, 5],
+        ], dtype=int)
+    if n_lens_subpixels == 6:
+        return 6, jnp.array([
+            [5, 4, 3, 3, 4, 5],
+            [4, 2, 1, 1, 2, 4],
+            [3, 1, 0, 0, 1, 3],
+            [3, 1, 0, 0, 1, 3],
+            [4, 2, 1, 1, 2, 4],
+            [5, 4, 3, 3, 4, 5],
         ], dtype=int)
     if n_lens_subpixels == 7:
         return 10, jnp.array([
@@ -42,19 +67,19 @@ def generate_monochromatic_lens_symmetry_indices(
             [8, 5, 4, 3, 3, 4, 5, 8],
             [9, 8, 7, 6, 6, 7, 8, 9]
         ], dtype=int)
-    else:
-        raise NotImplementedError(f'Not implemented manual symmetry for lens of size {n_lens_subpixels}')
-    # return 15, jnp.array([
-    #     [14, 13, 12, 11, 10, 11, 12, 13, 14],
-    #     [13, 9, 8, 7, 6, 7, 8, 9, 13],
-    #     [12, 8, 5, 4, 3, 4, 5, 8, 12],
-    #     [11, 7, 4, 2, 1, 2, 4, 7, 11],
-    #     [10, 6, 3, 1, 0, 1, 3, 6, 10],
-    #     [11, 7, 4, 2, 1, 2, 4, 7, 11],
-    #     [12, 8, 5, 4, 3, 4, 5, 8, 12],
-    #     [13, 9, 8, 7, 6, 7, 8, 9, 13],
-    #     [14, 13, 12, 11, 10, 11, 12, 13, 14]
-    # ])
+    if n_lens_subpixels == 9:
+        return 15, jnp.array([
+            [14, 13, 12, 11, 10, 11, 12, 13, 14],
+            [13, 9, 8, 7, 6, 7, 8, 9, 13],
+            [12, 8, 5, 4, 3, 4, 5, 8, 12],
+            [11, 7, 4, 2, 1, 2, 4, 7, 11],
+            [10, 6, 3, 1, 0, 1, 3, 6, 10],
+            [11, 7, 4, 2, 1, 2, 4, 7, 11],
+            [12, 8, 5, 4, 3, 4, 5, 8, 12],
+            [13, 9, 8, 7, 6, 7, 8, 9, 13],
+            [14, 13, 12, 11, 10, 11, 12, 13, 14]
+        ])
+    raise NotImplementedError(f'Not implemented manual symmetry for lens of size {n_lens_subpixels}')
 
     single_coordinate_samples = np.linspace(0, 1, n_lens_subpixels)
     x_mesh, y_mesh = np.meshgrid(single_coordinate_samples, single_coordinate_samples)
@@ -176,7 +201,7 @@ def prepare_functions_for_optimization(
 def run_optimization_and_visualize_results(wavelength, n_lens_subpixels, lens_subpixel_size, lens_thickness):
     permittivity = 4
     focal_length = 4000
-    approximate_number_of_terms = 500
+    approximate_number_of_terms = 300
     relative_focal_point_position = (0.5, 0.5)
 
     (
@@ -224,6 +249,7 @@ def run_optimization_and_visualize_results(wavelength, n_lens_subpixels, lens_su
 
     x = x_init
     max_eff = 0.
+
     for i in range(100):
         new_x, opt_state, loss, grad = step(x, opt_state)
         avg_grad_norm = jnp.linalg.norm(grad) / len(x)
@@ -240,9 +266,17 @@ def run_optimization_and_visualize_results(wavelength, n_lens_subpixels, lens_su
 if __name__ == '__main__':
     jnp.set_printoptions(linewidth=1000)
 
+    # for n in range(9, 10):
+    #     run_optimization_and_visualize_results(
+    #         wavelength=650,
+    #         n_lens_subpixels=n,
+    #         lens_subpixel_size=300,
+    #         lens_thickness=500
+    #     )
+
     run_optimization_and_visualize_results(
         wavelength=650,
-        n_lens_subpixels=4,
+        n_lens_subpixels=7,
         lens_subpixel_size=300,
         lens_thickness=800
     )

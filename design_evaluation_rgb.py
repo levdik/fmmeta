@@ -10,33 +10,32 @@ import matplotlib.pyplot as plt
 
 wavelengths = (650, 550, 450)
 bayer_relative_focal_points = [
-    ((0.25, 0.25),),
-    ((0.25, 0.75), (0.75, 0.25)),
-    ((0.75, 0.75),)
+    ((0.25, 0.75),),
+    ((0.25, 0.25), (0.75, 0.75)),
+    ((0.75, 0.25),)
 ]
 
 n_lens_subpixels = 8
-# n_unique_shapes = 9
-# symmetry_indices = jnp.array([
-#     [5, 8, 8, 5, 4, 7, 7, 4],
-#     [8, 2, 2, 8, 7, 1, 1, 7],
-#     [8, 2, 2, 8, 7, 1, 1, 7],
-#     [5, 8, 8, 5, 4, 7, 7, 4],
-#     [3, 6, 6, 3, 5, 8, 8, 5],
-#     [6, 0, 0, 6, 8, 2, 2, 8],
-#     [6, 0, 0, 6, 8, 2, 2, 8],
-#     [3, 6, 6, 3, 5, 8, 8, 5]
-# ])
 n_unique_shapes = 10
+# symmetry_indices = jnp.array([
+#     [1, 2, 2, 1, 8, 9, 9, 8],
+#     [3, 0, 0, 3, 9, 7, 7, 9],
+#     [3, 0, 0, 3, 9, 7, 7, 9],
+#     [1, 2, 2, 1, 8, 9, 9, 8],
+#     [5, 6, 6, 5, 1, 2, 2, 1],
+#     [6, 4, 4, 6, 3, 0, 0, 3],
+#     [6, 4, 4, 6, 3, 0, 0, 3],
+#     [5, 6, 6, 5, 1, 2, 2, 1]
+# ])
 symmetry_indices = jnp.array([
-    [1, 2, 2, 1, 8, 9, 9, 8],
-    [3, 0, 0, 3, 9, 7, 7, 9],
-    [3, 0, 0, 3, 9, 7, 7, 9],
-    [1, 2, 2, 1, 8, 9, 9, 8],
-    [5, 6, 6, 5, 1, 2, 2, 1],
-    [6, 4, 4, 6, 3, 0, 0, 3],
-    [6, 4, 4, 6, 3, 0, 0, 3],
-    [5, 6, 6, 5, 1, 2, 2, 1]
+    [8, 9, 9, 8, 1, 2, 2, 1],
+    [9, 7, 7, 9, 3, 0, 0, 3],
+    [9, 7, 7, 9, 3, 0, 0, 3],
+    [8, 9, 9, 8, 1, 2, 2, 1],
+    [1, 2, 2, 1, 5, 6, 6, 5],
+    [3, 0, 0, 3, 6, 4, 4, 6],
+    [3, 0, 0, 3, 6, 4, 4, 6],
+    [1, 2, 2, 1, 5, 6, 6, 5]
 ])
 
 permittivity = 4
@@ -78,6 +77,8 @@ def evaluate_design(a_unique, b_unique):
         shapes_to_amps_function, basis_indices = prepare_shapes_to_amplitudes_function(
             wavelength=wavelength, **common_func_prep_kwargs)
         focal_plane_amps = shapes_to_amps_function(shapes)
+        focusing_eff = calculate_focusing_efficiency(focal_plane_amps, basis_indices, bayer_relative_focal_points[i][0])
+        print(wavelength, focusing_eff)
         intensity_map = intensity_map_from_fourier_amplitudes(focal_plane_amps, basis_indices)
         plot_amplitude_map(fig, ax[i], intensity_map, wavelength_nm=wavelength, map_bounds=[0, total_lens_period])
 
@@ -87,8 +88,10 @@ def evaluate_design(a_unique, b_unique):
 if __name__ == '__main__':
     # a = [96, 88, 110, 107, 103, 88, 85, 94, 95, 93]
     # b = [48, 38, 57, 59, 41, 38, 35, 43, 45, 43]
-    a = [114, 103, 122, 121, 118, 106, 97, 114, 123, 115]
-    b = [28, 12, 35, 35, 31, 19, 23, 17, 22, 20]
+    # a = [114, 103, 122, 121, 118, 106, 97, 114, 123, 115]
+    # b = [28, 12, 35, 35, 31, 19, 23, 17, 22, 20]
+    a = [114, 116, 116, 113, 106, 111, 100, 123, 131, 125]
+    b = [22, 26, 29, 27, 16, 23, 27, 25, 27, 29]
     a, b = jnp.array(a), jnp.array(b)
 
     print(a + 2 * b)

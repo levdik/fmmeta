@@ -119,7 +119,8 @@ def _calculate_max_theoretical_focusing_efficiencies(max_period_relative_to_wave
 
 
 def _calculate_example_max_eff_and_plot():
-    periods, efficiencies = _calculate_max_theoretical_focusing_efficiencies(4)
+    periods, efficiencies = _calculate_max_theoretical_focusing_efficiencies(5)
+    print(periods, efficiencies)
     import matplotlib.pyplot as plt
     plt.plot([0, max(periods)], [1, 1], '--')
     plt.step(periods, efficiencies, where='post')
