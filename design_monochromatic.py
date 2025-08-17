@@ -194,7 +194,8 @@ def prepare_functions_for_optimization(
         focal_plane_field_fourier_amplitudes,
         total_efficiency_from_unique_widths,
         n_unique_widths,
-        propagating_basis_indices
+        propagating_basis_indices,
+        symmetry_indices
     )
 
 
@@ -208,7 +209,8 @@ def run_optimization_and_visualize_results(wavelength, n_lens_subpixels, lens_su
         focal_plane_field_fourier_amplitudes,
         total_efficiency_from_unique_widths,
         n_unique_widths,
-        propagating_basis_indices
+        propagating_basis_indices,
+        symmetry_indices
     ) = prepare_functions_for_optimization(
         wavelength=wavelength,
         permittivity=permittivity,
@@ -231,8 +233,25 @@ def run_optimization_and_visualize_results(wavelength, n_lens_subpixels, lens_su
 
     x_init = 0.5 * jnp.ones(n_unique_widths)
 
-    # key = jax.random.key(1)
+    # key = jax.random.key(0)
     # x_init = jax.random.uniform(key, (n_unique_widths,))
+
+    # from translibs.translib_square_th500 import a as lib_a, transmissions as lib_transmissions
+    # from lens_forward_design import find_best_fit_pillars
+    # from phase_profile_manager import generate_target_phase
+    # from lens_permittivity_profile_generator import generate_pillar_center_positions
+    # pillar_centers = generate_pillar_center_positions(
+    #     lens_subpixel_size=lens_subpixel_size, n_lens_subpixels=n_lens_subpixels)
+    # target_phases = generate_target_phase(
+    #     points=pillar_centers, focal_points=[0, 0, focal_length], wavelength=wavelength)
+    # target_phases -= target_phases[0]
+    # best_fit_pillar_indices = find_best_fit_pillars(jnp.exp(1j * target_phases), lib_transmissions, n_wavelengths=1)
+    # best_fit_pillar_widths = lib_a[best_fit_pillar_indices].reshape(n_lens_subpixels, -1)
+    # unique_widths_init = np.zeros(n_unique_widths)
+    # for sym_i, a_i in zip(symmetry_indices.flatten(), best_fit_pillar_widths.flatten()):
+    #     unique_widths_init[sym_i] = a_i
+    # x_init = jnp.array(unique_widths_init / lens_subpixel_size)
+    # print(x_init)
 
     opt_state = optimizer.init(x_init)
 
@@ -255,10 +274,11 @@ def run_optimization_and_visualize_results(wavelength, n_lens_subpixels, lens_su
         avg_grad_norm = jnp.linalg.norm(grad) / len(x)
         rounded_widths = jnp.round(x * lens_subpixel_size).astype(int)
         max_eff = max(-loss, max_eff)
-        print(f"Step {i}: efficiency={-loss:.4f}, widths={rounded_widths}, |grad|={avg_grad_norm}")
-        if avg_grad_norm < 0.001:
-            print("Stop on gradient norm criteria")
-            break
+        # print(f"Step {i}: efficiency={-loss:.4f}, widths={rounded_widths}, |grad|={avg_grad_norm}")
+        # if avg_grad_norm < 0.001:
+        #     print("Stop on gradient norm criteria")
+        #     break
+        print(i + 1, -loss, sep='\t')
         x = new_x
     print('Max efficiency:', max_eff)
 
@@ -278,7 +298,7 @@ if __name__ == '__main__':
         wavelength=650,
         n_lens_subpixels=7,
         lens_subpixel_size=300,
-        lens_thickness=800
+        lens_thickness=500
     )
 
     # import sys
