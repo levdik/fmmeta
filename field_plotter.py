@@ -65,7 +65,7 @@ def plot_amplitude_map(figure, axes, amplitude_map,
     amp_plot = axes.imshow(
         amplitude_map,
         extent=map_bounds,
-        origin='lower',
+        # origin='lower',
         interpolation='nearest',
         vmin=vmin, vmax=vmax,
         cmap=cmap
