@@ -7,8 +7,9 @@ def generate_wave_permittivity_basis_indices(r):
     n_max = int(np.floor(r))
 
     basis_indices = []
-    for n in range(-n_max, n_max + 1):
-        for m in range(-n_max, n_max + 1):
+    single_index_range = [0] + [s * i for i in range(1, n_max + 1) for s in [1, -1]]
+    for n in single_index_range:
+        for m in single_index_range:
             if n ** 2 + m ** 2 <= r ** 2:
                 basis_indices.append((n, m))
     return basis_indices
@@ -70,17 +71,20 @@ def generate_wave_permittivity_pattern(
     single_coordinate_samples = jnp.linspace(0, 1, resolution, endpoint=False)
     x, y = jnp.meshgrid(single_coordinate_samples, single_coordinate_samples)
 
-    # wave_values = jnp.zeros_like(x, dtype=complex)
-    # for a, (n, m) in zip(amplitudes, basis_indices):
-    #     wave_values += a * jnp.exp(1j * 2 * jnp.pi * (n * x + m * y))
-
     n, m = basis_indices.T
+    a_00 = amplitudes[0].real
+    amplitudes = amplitudes.at[0].set(0)
+
     phase = n[None, None, :] * x[:, :, None] + m[None, None, :] * y[:, :, None]
     term = amplitudes[None, None, :] * jnp.exp(1j * 2 * jnp.pi * phase)
 
     wave_values = jnp.sum(term, axis=-1)
-
     wave_values = wave_values.real
+
+    filling_factor = (a_00 + 1) / 2
+    max_wave_val = jnp.max(wave_values)
+    min_wave_val = jnp.min(wave_values)
+    wave_values -= min_wave_val * filling_factor + max_wave_val * (1 - filling_factor)
 
     cell_corner_values = jnp.stack([
         wave_values,
