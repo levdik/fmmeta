@@ -114,7 +114,8 @@ if __name__ == '__main__':
     field_plot = ey.real
     # plt.pcolormesh(xplot, zplot, field_plot, shading='nearest', cmap='bwr')
 
-    plt.pcolormesh(xplot, zplot, jnp.abs(ey) ** 2, shading='nearest', cmap='hot')
+    fig, ax = plt.subplots(dpi=1000)
+    ax.pcolormesh(xplot, zplot, jnp.abs(ey) ** 2, shading='nearest', cmap='hot')
 
     # plt.plot([0, 2100], [thickness_above, thickness_above], '--', color='white')
     # plt.plot([0, 2100], [thickness_above + lens_thickness, thickness_above + lens_thickness], '--', color='white')
@@ -127,12 +128,13 @@ if __name__ == '__main__':
     for i in range(n_lens_subpixels):
         width = widths[3, i]
         center_x = pillar_centers_x[i]
-        plt.plot(
+        ax.plot(
             [center_x - width/2, center_x + width/2, center_x + width/2, center_x - width/2, center_x - width/2],
             [thickness_above] * 2 +  [thickness_above + lens_thickness] * 2  + [thickness_above],
             color='white'
         )
 
-    # plt.axis("equal")
+    plt.axis("equal")
     plt.axis("off")
+    # plt.savefig("xz-intensity.png", bbox_inches='tight')
     plt.show()

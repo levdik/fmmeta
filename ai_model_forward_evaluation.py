@@ -76,10 +76,10 @@ if __name__ == "__main__":
     lens_subpixel_size = 300
     lens_thickness = 500
     model = SquarePixelLensScatteringModel.load(
-        filename='ai_models/red_7x7_forward_no_ref_[1024]x4.pkl',
+        filename='ai_models/red_7x7_forward_no_ref_[256]x6_v2.pkl',
         n_propagating_waves=37,
         n_lens_params=n_pillars ** 2,
-        hidden_layer_dims=[1024] * 4,
+        hidden_layer_dims=[256] * 6,
     )
 
     true_widths_to_amps_f = prepare_lens_pixel_width_to_scattered_amplitudes_function(

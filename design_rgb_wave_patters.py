@@ -29,8 +29,8 @@ def optimize_wavy_rgb_lens(
     }
     red_sim_func, red_basis_indices = wf.prepare_wave_lens_scattering_simulating_function(
         wavelength=wavelengths[2], **common_func_prep_kwargs)
-    # green_sim_func, green_basis_indices = wf.prepare_wave_lens_scattering_simulating_function(
-    #     wavelength=wavelengths[1], **common_func_prep_kwargs)
+    green_sim_func, green_basis_indices = wf.prepare_wave_lens_scattering_simulating_function(
+        wavelength=wavelengths[1], **common_func_prep_kwargs)
     blue_sim_func, blue_basis_indices = wf.prepare_wave_lens_scattering_simulating_function(
         wavelength=wavelengths[0], **common_func_prep_kwargs)
 
@@ -42,17 +42,17 @@ def optimize_wavy_rgb_lens(
         total_efficiency = transmission_efficiency * focusing_efficiency
         return total_efficiency
 
-    # def green_focusing_efficiency_function(permittivity_map):
-    #     focal_plane_amps = green_sim_func(permittivity_map)
-    #     focusing_efficiency = (
-    #             calculate_focusing_efficiency(
-    #                 focal_plane_amps, green_basis_indices, relative_focal_points[1][0])
-    #             + calculate_focusing_efficiency(
-    #         focal_plane_amps, green_basis_indices, relative_focal_points[1][1])
-    #     )
-    #     transmission_efficiency = jnp.sum(jnp.abs(focal_plane_amps) ** 2)
-    #     total_efficiency = transmission_efficiency * focusing_efficiency
-    #     return total_efficiency
+    def green_focusing_efficiency_function(permittivity_map):
+        focal_plane_amps = green_sim_func(permittivity_map)
+        focusing_efficiency = (
+                calculate_focusing_efficiency(
+                    focal_plane_amps, green_basis_indices, relative_focal_points[1][0])
+                + calculate_focusing_efficiency(
+            focal_plane_amps, green_basis_indices, relative_focal_points[1][1])
+        )
+        transmission_efficiency = jnp.sum(jnp.abs(focal_plane_amps) ** 2)
+        total_efficiency = transmission_efficiency * focusing_efficiency
+        return total_efficiency
 
     def blue_focusing_efficiency_function(permittivity_map):
         focal_plane_amps = blue_sim_func(permittivity_map)
@@ -72,9 +72,11 @@ def optimize_wavy_rgb_lens(
         # init_params_re_im = 0.1 * jax.random.uniform(jax.random.key(42), shape=(2, n_primary_params), minval=-1, maxval=1)
         # init_params = init_params_re_im[0] + 1j * init_params_re_im[1]
         init_params = 0.1 * jax.random.uniform(jax.random.key(42), shape=(2, n_primary_params), minval=-1, maxval=1)
+        init_params = init_params.at[0, 0].set(0)
 
-    # def project_onto_boundaries(x):
-    #     return jnp.where(jnp.abs(x) > 1, x / jnp.abs(x), x)
+    def project_onto_boundaries(x):
+        # return jnp.where(jnp.abs(x) > 1, x / jnp.abs(x), x)
+        return jnp.clip(x, -1, 1)
 
     def params_to_focusing_efficiency(params):
         pattern_amps = params[0][symmetry_indices] + 1j * params[1][symmetry_indices]
@@ -83,15 +85,15 @@ def optimize_wavy_rgb_lens(
             basis_indices=full_basis_indices,
             permittivity=permittivity
         )
-        # overall_efficiency = (
-        #     red_focusing_efficiency_function(permittivity_pattern)
-        #     + green_focusing_efficiency_function(permittivity_pattern)
-        #     + blue_focusing_efficiency_function(permittivity_pattern)
-        # ) / 3
         overall_efficiency = (
             red_focusing_efficiency_function(permittivity_pattern)
+            + green_focusing_efficiency_function(permittivity_pattern)
             + blue_focusing_efficiency_function(permittivity_pattern)
-        ) / 2
+        ) / 3
+        # overall_efficiency = (
+        #     red_focusing_efficiency_function(permittivity_pattern)
+        #     + blue_focusing_efficiency_function(permittivity_pattern)
+        # ) / 2
         return overall_efficiency
 
     def loss_fn(params):
@@ -107,7 +109,7 @@ def optimize_wavy_rgb_lens(
         loss, grad = loss_value_and_grad_fn(x)
         updates, opt_state = optimizer.update(grad, opt_state)
         x = optax.apply_updates(x, updates)
-        # x = project_onto_boundaries(x)
+        x = project_onto_boundaries(x)
         return x, opt_state, loss, grad
 
     x = init_params
@@ -135,15 +137,15 @@ def optimize_wavy_rgb_lens(
     )
 
     red_focal_plane_amps = red_sim_func(permittivity_pattern)
-    # green_focal_plane_amps = green_sim_func(permittivity_pattern)
+    green_focal_plane_amps = green_sim_func(permittivity_pattern)
     blue_focal_plane_amps = blue_sim_func(permittivity_pattern)
-    # focal_plane_amps = [red_focal_plane_amps, green_focal_plane_amps, blue_focal_plane_amps]
-    # basis_indices = [red_basis_indices, green_basis_indices, blue_basis_indices]
-    focal_plane_amps = [red_focal_plane_amps, blue_focal_plane_amps]
-    basis_indices = [red_basis_indices, blue_basis_indices]
+    focal_plane_amps = [red_focal_plane_amps, green_focal_plane_amps, blue_focal_plane_amps]
+    basis_indices = [red_basis_indices, green_basis_indices, blue_basis_indices]
+    # focal_plane_amps = [red_focal_plane_amps, blue_focal_plane_amps]
+    # basis_indices = [red_basis_indices, blue_basis_indices]
 
-    # fig, ax = plt.subplots(2, 2)
-    fig, ax = plt.subplots(1, 3, figsize=(30, 10))
+    fig, ax = plt.subplots(2, 2, figsize=(10, 10))
+    # fig, ax = plt.subplots(1, 3, figsize=(30, 10))
     plt.tight_layout()
     ax = ax.flatten()
 
@@ -158,8 +160,8 @@ def optimize_wavy_rgb_lens(
 
         plot_amplitude_map(
             fig, ax[i + 1], intensity,
-            # wavelength_nm=wavelengths[2 - i],
-            wavelength_nm=[wavelengths[2], wavelengths[0]][i],
+            wavelength_nm=wavelengths[2 - i],
+            # wavelength_nm=[wavelengths[2], wavelengths[0]][i],
             map_bounds=[0, period],
             cbar=False
         )
@@ -181,7 +183,7 @@ if __name__ == '__main__':
         approx_n_terms=300,
         wave_n_max=8,
         n_steps=500,
-        learning_rate=0.01
+        learning_rate=0.005
     )
 
     print(repr(params))

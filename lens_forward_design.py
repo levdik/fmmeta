@@ -78,7 +78,7 @@ def generate_transmission_library(
 
     for shape in shapes:
         trans_coeff = complex(shapes_to_amplitudes_func(shape)[0]) / phase_factor
-        # print(shape[0], shape[1], np.abs(trans_coeff), np.angle(trans_coeff))
+        print(shape[0], shape[1], np.abs(trans_coeff), np.angle(trans_coeff))
         transmission_library.append(trans_coeff)
 
     print(transmission_library)
@@ -149,15 +149,9 @@ def visualize_3d_library_projections(t_red, t_green, t_blue):
 
 
 if __name__ == '__main__':
-    # print(find_best_fit_pillars(
-    #     target_transmissions=jnp.array([[1, 2, 3.1], [0.1, 0.1, 0.1], [0.2, 0, 0]]),
-    #     lib_transmissions=jnp.array([[1, 2, 3], [0, 0, 0]]),
-    #     n_wavelengths=3,
-    #     return_distance=True
-    # ))
-
-    # a_range = jnp.arange(0, 300, 10)
-    # shapes = jnp.vstack([a_range] + [jnp.zeros_like(a_range)] * 3).T
+    a_range = jnp.arange(0, 300, 10)
+    # a_range = jnp.array([0, 295])
+    shapes = jnp.vstack([a_range] + [jnp.zeros_like(a_range)] * 3).T
 
     # shapes = []
     # for a in range(0, 300, 10):
@@ -170,15 +164,17 @@ if __name__ == '__main__':
     #
     # for wl in [650, 550, 450]:
     #     print(wl)
-    #     generate_transmission_library(
-    #         # shapes=jnp.array([(0.1, 0, 0, 0)]),
-    #         shapes=shapes,
-    #         wavelength=wl,
-    #         permittivity=4,
-    #         period=300,
-    #         lens_thickness=3000,
-    #         approximate_number_of_terms=100
-    #     )
+    for wl in [650]:
+        generate_transmission_library(
+            # shapes=jnp.array([(0.1, 0, 0, 0)]),
+            shapes=shapes,
+            wavelength=wl,
+            permittivity=4,
+            period=300,
+            lens_thickness=700,
+            approximate_number_of_terms=100
+        )
+    exit()
 
     from translibs.translib_cross_th3000_p300 import shapes, transmissions_red, transmissions_green, transmissions_blue
     # visualize_3d_library_projections(transmissions_red, transmissions_green, transmissions_blue)

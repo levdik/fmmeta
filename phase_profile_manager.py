@@ -66,3 +66,22 @@ def generate_target_phase(points, focal_points, wavelength,
     target_phase = angle_to_standard_range(incidence_phase - k0 * optical_paths)
 
     return target_phase
+
+
+if __name__ == '__main__':
+    x_range = np.linspace(-1, 1, 300)
+    x, y = np.meshgrid(x_range, x_range)
+    focal_distance = 5
+    wavelength = 0.1
+    k0 = 2 * np.pi / wavelength
+    target_phase = -k0 * (np.sqrt(focal_distance ** 2 + x ** 2 + y ** 2) - focal_distance)
+    target_phase = angle_to_standard_range(target_phase)
+    print(np.max(target_phase))
+    print(np.min(target_phase))
+
+    import matplotlib.pyplot as plt
+    plt.imshow(target_phase, cmap='twilight', vmin=-np.pi, vmax=np.pi)
+    cbar = plt.colorbar(ticks=[-np.pi, 0, np.pi])
+    cbar.ax.set_yticklabels(['-π', '0', 'π'])
+    plt.axis("off")
+    plt.show()

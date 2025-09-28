@@ -281,6 +281,7 @@ def run_optimization_and_visualize_results(wavelength, n_lens_subpixels, lens_su
         print(i + 1, -loss, sep='\t')
         x = new_x
     print('Max efficiency:', max_eff)
+    print(jnp.round(x * lens_subpixel_size).astype(int)[symmetry_indices])
 
 
 if __name__ == '__main__':
@@ -296,7 +297,7 @@ if __name__ == '__main__':
 
     run_optimization_and_visualize_results(
         wavelength=650,
-        n_lens_subpixels=7,
+        n_lens_subpixels=5,
         lens_subpixel_size=300,
         lens_thickness=500
     )
