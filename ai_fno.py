@@ -4,6 +4,8 @@ import jax.numpy as jnp
 from flax import nnx
 import optax
 
+import pickle
+
 from typing import Callable
 
 
@@ -102,22 +104,31 @@ class FourierNeuralOperator(nnx.Module):
         return x
 
 
-# class RealToComplexFNO(nnx.Module):
-#     def __init__(
-#             self, hidden_n_channels: tuple[int], n_pixels: int, mode_threshold: float,
-#             activation_fn: Callable[jax.Array, jax.Array] = nnx.leaky_relu, rngs: nnx.Rngs
-#     ):
-#         self.fno = FourierNeuralOperator(
-#             n_in_channels=1, n_out_channels=2,
-#             hidden_n_channels, n_pixels, mode_threshold, activation_fn, rngs
-#         )
-#
-#     def __call__(self, x: jax.Array) -> jax.Array:
-#         x = fno(x)
-#         x[..., 0] + 1j * x[..., 1]
-#         y = jnp.fft.fft2(x)
-#         # TODO: select or not propagating waves
-#         return y
+class RealToComplexFNO(nnx.Module):
+    def __init__(
+            self, hidden_n_channels: tuple[int], n_pixels: int, mode_threshold: float,
+            activation_fn: Callable[jax.Array, jax.Array], rngs: nnx.Rngs
+    ):
+        self.fno = FourierNeuralOperator(1, 2, hidden_n_channels, n_pixels, mode_threshold, activation_fn, rngs)
+
+    def __call__(self, x: jax.Array) -> jax.Array:
+        x = (self.fno(x[..., jnp.newaxis]))
+        y = x[..., 0] + 1j * x[..., 1]
+        return y
+
+    def save(self, filename):
+        _, state = nnx.split(self)
+        with open(filename, 'wb') as f:
+            pickle.dump(state, f)
+
+    @classmethod
+    def load(cls, *args, **kwargs):
+        abstract_model = nnx.eval_shape(lambda: cls(*args, **kwargs, rngs=nnx.Rngs(0)))
+        graph_def, abstract_state = nnx.split(abstract_model)
+        with open(filename, 'rb') as f:
+            state_restored = pickle.load(f)
+        model = nnx.merge(graph_def, state_restored)
+        return model
 
 
 if __name__ == '__main__':
