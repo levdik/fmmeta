@@ -8,8 +8,8 @@ from fmmax import fields, basis
 def _generate_focusing_efficiency_quadratic_form_matrix(basis_indices, relative_focal_point):
     n_harmonics = len(basis_indices)
 
-    x_phase_shift = 2 * np.pi * (relative_focal_point[0] - 1 / 4)
-    y_phase_shift = 2 * np.pi * (relative_focal_point[1] - 1 / 4)
+    x_phase_shift = 2 * jnp.pi * (relative_focal_point[0] - 1 / 4)
+    y_phase_shift = 2 * jnp.pi * (relative_focal_point[1] - 1 / 4)
 
     matrix = (1 / 4) * np.eye(n_harmonics, dtype=complex)
 
@@ -28,7 +28,7 @@ def _generate_focusing_efficiency_quadratic_form_matrix(basis_indices, relative_
     return jnp.array(matrix)
 
 
-def calculate_focusing_efficiency(amplitudes, basis_indices, relative_focal_point=jnp.array([0.5, 0.5])):
+def calculate_focusing_efficiency(amplitudes, basis_indices, relative_focal_point=(0.5, 0.5)):
     quadratic_form_matrix = _generate_focusing_efficiency_quadratic_form_matrix(basis_indices, relative_focal_point)
     focused_power = jnp.dot(jnp.dot(amplitudes, quadratic_form_matrix), jnp.conj(amplitudes)).real
     total_power = jnp.sum(jnp.abs(amplitudes) ** 2)

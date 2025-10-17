@@ -63,7 +63,7 @@ def optimize_wavy_monochromatic_lens(
     optimizer = optax.adam(1e-2, b1=0.9)
     opt_state = optimizer.init(init_params)
 
-    # @jax.jit
+    @jax.jit
     def step(x, opt_state):
         loss, grad = loss_value_and_grad_fn(x)
         updates, opt_state = optimizer.update(grad, opt_state)

@@ -237,6 +237,64 @@ def run_batch_and_save(batch_size, key_seed):
         pickle.dump(results, file)
 
 
+def load_and_save_as_maps():
+    primitive_lattice_vectors = basis.LatticeVectors(
+        u=period * basis.X, v=period * basis.Y
+    )
+    expansion = basis.generate_expansion(
+        primitive_lattice_vectors=primitive_lattice_vectors,
+        approximate_num_terms=approximate_number_of_terms,
+        truncation=basis.Truncation.CIRCULAR,
+    )
+    basis_indices_norm = np.linalg.norm(expansion.basis_coefficients, axis=-1)
+    n_propagating_waves = np.count_nonzero(basis_indices_norm < period / wavelength)
+    expansion = expansion.basis_coefficients[:n_propagating_waves]
+
+    data = np.load('wave_pattern_training_data/wave_red_30k.npz')
+    pattern_amps = data['primary_pattern_amps']
+    field_amps = data['scattered_field_amps']
+    field_amps = field_amps[:, :len(expansion)] + 1j * field_amps[:, len(expansion):]
+
+    x = []
+    y = []
+
+    for i in range(len(pattern_amps)):
+    # for i in range(10):
+        if i % 100 == 0:
+            print(i)
+        pattern = generate_wave_permittivity_pattern(
+            amplitudes=jnp.array(pattern_amps[i])[symmetry_indices],
+            basis_indices=full_basis_indices,
+            permittivity=lens_permittivity,
+            permittivity_ambience=1.,
+            resolution=64
+        )
+        pattern = np.array(pattern)
+
+        field = np.zeros((64, 64), dtype=complex)
+        field[expansion[:, 0], expansion[:, 1]] = field_amps[i]
+        field = np.fft.ifft2(field)
+
+        # print(np.linalg.norm(
+        #     np.fft.fft2(field)[expansion[:, 0], expansion[:, 1]]
+        #     - field_amps[i]
+        # ))
+
+        # fig, ax = plt.subplots(1, 3)
+        # ax[0].imshow(pattern)
+        # ax[1].imshow(field.real)
+        # ax[2].imshow(field.imag)
+        # plt.show()
+
+        x.append(pattern)
+        y.append(field)
+
+    x = np.stack(x)
+    y = np.stack(y)
+    print(x.shape, y.shape)
+    np.savez('wave_pattern_training_data/wave_red_30k_maps.npz', x=x, y=y)
+
+
 if __name__ == '__main__':
     # TODO: choose wavelengths (either uniformly in the range or one of the samples in the eval)
     #  and use refractiveindex2
@@ -244,4 +302,6 @@ if __name__ == '__main__':
 
     # show_example_random_permittivity_patterns(shape=[4, 7])
 
-    run_batch_and_save(batch_size=2, key_seed=1)
+    # run_batch_and_save(batch_size=2, key_seed=1)
+
+    load_and_save_as_maps()
