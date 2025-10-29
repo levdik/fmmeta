@@ -122,13 +122,32 @@ class RealToComplexFNO(nnx.Module):
             pickle.dump(state, f)
 
     @classmethod
-    def load(cls, *args, **kwargs):
+    def load(cls, filename, *args, **kwargs):
         abstract_model = nnx.eval_shape(lambda: cls(*args, **kwargs, rngs=nnx.Rngs(0)))
         graph_def, abstract_state = nnx.split(abstract_model)
         with open(filename, 'rb') as f:
             state_restored = pickle.load(f)
         model = nnx.merge(graph_def, state_restored)
         return model
+
+
+class PatternToAmpsFNO(nnx.Module):
+    def __init__(
+            self, hidden_n_channels: tuple[int], n_pixels: int, mode_threshold: float,
+            activation_fn: Callable, rngs: nnx.Rngs
+    ):
+        self.fno = FourierNeuralOperator(1, 2, hidden_n_channels, n_pixels, mode_threshold, activation_fn, rngs)
+        self.propagating_indices = np.array([
+            [0, -1,  0,  0,  1, -1, -1,  1,  1, -2,  0,  0,  2, -2, -2, -1, -1,  1,  1,  2,  2, -2, -2,  2,  2, -3,  0,  0,  3],
+            [0,  0, -1,  1,  0, -1,  1, -1,  1,  0, -2,  2,  0, -1,  1, -2,  2, -2,  2, -1,  1, -2,  2, -2,  2,  0, -3,  3,  0]
+        ])
+
+    def __call__(self, x: jax.Array) -> jax.Array:
+        x = (self.fno(x[..., jnp.newaxis]))
+        y = x[..., 0] + 1j * x[..., 1]
+        amps = jnp.fft.fft2(y) / (64 ** 2)
+        amps = amps[..., self.propagating_indices[0], self.propagating_indices[1]]
+        return amps
 
 
 if __name__ == '__main__':
