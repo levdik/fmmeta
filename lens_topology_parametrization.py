@@ -127,24 +127,129 @@ class FourierInterpolationTopologyParametrization(CutoffTopologyParametrization,
         return interpolated_values
 
 
-if __name__ == '__main__':
-    n = 10
+class FourierExpansionTopologyParametrization(CutoffTopologyParametrization):
+    @staticmethod
+    def generate_basis_indices(r):
+        n_max = int(np.floor(r))
 
-    # topology_parametrization = BicubicInterpolationTopologyParametrization(grid_size=n, symmetry_type='central')
-    topology_parametrization = FourierInterpolationTopologyParametrization(grid_size=n, symmetry_type='central')
+        basis_indices = []
+        single_index_range = [0] + [s * i for i in range(1, n_max + 1) for s in [1, -1]]
+        for n in single_index_range:
+            for m in single_index_range:
+                if n ** 2 + m ** 2 <= r ** 2:
+                    basis_indices.append((n, m))
+        return basis_indices
+
+    @staticmethod
+    def generate_primary_basis_indices(r, symmetry_type='central'):
+        full_basis_indices = FourierExpansionTopologyParametrization.generate_basis_indices(r)
+        symmetry_indices = np.zeros(len(full_basis_indices), dtype=int)
+        primary_basis = []
+
+        if symmetry_type == 'central':
+            for i, (n, m) in enumerate(full_basis_indices):
+                if n >= m >= 0:
+                    primary_basis.append((n, m))
+                    symmetry_indices[i] = len(primary_basis) - 1
+
+            for i, (n, m) in enumerate(full_basis_indices):
+                if not (n >= m >= 0):
+                    for i1, (n1, m1) in enumerate(primary_basis):
+                        if (abs(n1) == abs(n) and abs(m1) == abs(m)) or (abs(n1) == abs(m) and abs(m1) == abs(n)):
+                            symmetry_indices[i] = i1
+                            break
+        elif symmetry_type == 'main_diagonal':
+            symmetry_indices = np.zeros(len(full_basis_indices), dtype=int)
+            primary_basis = []
+            for i, (n, m) in enumerate(full_basis_indices):
+                if n >= m:
+                    primary_basis.append((n, m))
+                    symmetry_indices[i] = len(primary_basis) - 1
+
+            for i, (n, m) in enumerate(full_basis_indices):
+                if n < m:
+                    for i1, (n1, m1) in enumerate(primary_basis):
+                        if n1 == m and m1 == n:
+                            symmetry_indices[i] = i1
+                            break
+        else:
+            raise ValueError('Unknown symmetry type')
+
+        full_basis_indices = jnp.array(full_basis_indices)
+        primary_basis = jnp.array(primary_basis)
+
+        return full_basis_indices, primary_basis, symmetry_indices
+
+    def __init__(self, r_max, symmetry_type='central'):
+        (
+            full_basis_indices, primary_basis, symmetry_indices
+        ) = FourierExpansionTopologyParametrization.generate_primary_basis_indices(r_max, symmetry_type)
+        self.full_basis_indices = full_basis_indices
+        self.primary_basis = primary_basis
+        self.symmetry_indices = symmetry_indices
+        self.n_primary_parameters = len(primary_basis)
+        TopologyParametrization.__init__(self, n_geometrical_parameters=2 * len(primary_basis) - 1)
+
+    def apply_symmetry(self, geometrical_parameters: jnp.ndarray) -> jnp.ndarray:
+        a_00 = geometrical_parameters[0]
+        comples_geometrical_parameters = jnp.concatenate([
+            jnp.atleast_1d(a_00),
+            geometrical_parameters[1:self.n_primary_parameters]
+            + 1j * geometrical_parameters[self.n_primary_parameters:]
+        ])
+        return comples_geometrical_parameters[self.symmetry_indices]
+
+    def extract_unique_parameters(self, full_geometrical_parameters: jnp.ndarray) -> jnp.ndarray:
+        raise NotImplemented
+
+    def _generate_pattern_cutoff_values(self, geometrical_parameters: jnp.ndarray, n_samples: int) -> jnp.ndarray:
+        a_00 = geometrical_parameters[0].real
+        amps = geometrical_parameters.at[0].set(0)
+
+        single_coordinate_samples = jnp.linspace(0, 1, n_samples, endpoint=False)
+        x, y = jnp.meshgrid(single_coordinate_samples, single_coordinate_samples)
+        n, m = self.full_basis_indices.T
+
+        phase = n[None, None, :] * x[:, :, None] + m[None, None, :] * y[:, :, None]
+        term = amps[None, None, :] * jnp.exp(1j * 2 * jnp.pi * phase)
+
+        wave_values = jnp.sum(term, axis=-1)
+        wave_values = wave_values.real
+
+        filling_factor = (a_00 + 1) / 2
+        max_wave_val = jnp.max(wave_values)
+        min_wave_val = jnp.min(wave_values)
+        wave_values -= min_wave_val * filling_factor + max_wave_val * (1 - filling_factor)
+
+        return wave_values
+
+
+if __name__ == '__main__':
+    # topology_parametrization = BicubicInterpolationTopologyParametrization(grid_size=10, symmetry_type='central')
+    topology_parametrization = FourierInterpolationTopologyParametrization(grid_size=15, symmetry_type='main_diagonal')
+    # topology_parametrization = FourierExpansionTopologyParametrization(r_max=2, symmetry_type='main_diagonal')
 
     import matplotlib.pyplot as plt
     import matplotlib
     matplotlib.use('TkAgg')
 
-    x = jax.random.uniform(
-        jax.random.key(2),
-        shape=(topology_parametrization.n_geometrical_parameters,),
-        minval=-1, maxval=1
-    )
-    y = topology_parametrization(x)
-    # y = topology_parametrization._generate_pattern_cutoff_values(topology_parametrization.apply_symmetry(x), 100)
-    fig, ax = plt.subplots(1, 2)
-    ax[0].imshow(topology_parametrization.apply_symmetry(x))
-    ax[1].imshow(y)
+    fig, ax = plt.subplots(5, 5)
+    rng_key = jax.random.key(0)
+
+    for ax_i in ax.flatten():
+        rng_key, rng_subkey = jax.random.split(rng_key)
+        x = jax.random.uniform(
+            rng_subkey,
+            shape=(topology_parametrization.n_geometrical_parameters,),
+            minval=-1, maxval=1
+        )
+        y = topology_parametrization(x)
+        # y = topology_parametrization._generate_pattern_cutoff_values(topology_parametrization.apply_symmetry(x), 100)
+        # fig, ax = plt.subplots(1, 2)
+        # ax[0].imshow(topology_parametrization.apply_symmetry(x))
+        # ax[1].imshow(y)
+        ax_i.imshow(y)
+        ax_i.set_axis_off()
+
+    plt.tight_layout()
     plt.show()

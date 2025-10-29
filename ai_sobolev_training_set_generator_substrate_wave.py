@@ -259,21 +259,21 @@ def load_and_save_as_maps():
     y = []
 
     for i in range(len(pattern_amps)):
-    # for i in range(10):
+    # for i in range(1000):
         if i % 100 == 0:
             print(i)
         pattern = generate_wave_permittivity_pattern(
             amplitudes=jnp.array(pattern_amps[i])[symmetry_indices],
             basis_indices=full_basis_indices,
-            permittivity=lens_permittivity,
-            permittivity_ambience=1.,
+            permittivity=1.,
+            permittivity_ambience=0.,
             resolution=64
         )
         pattern = np.array(pattern)
 
         field = np.zeros((64, 64), dtype=complex)
         field[expansion[:, 0], expansion[:, 1]] = field_amps[i]
-        field = np.fft.ifft2(field)
+        field = np.fft.ifft2(field) * (64 ** 2)
 
         # print(np.linalg.norm(
         #     np.fft.fft2(field)[expansion[:, 0], expansion[:, 1]]

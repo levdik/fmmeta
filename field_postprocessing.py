@@ -194,6 +194,15 @@ def min_difference_between_amplitude_vectors(x, y):
 #     return jnp.angle(jnp.dot(x, jnp.conj(y)))
 
 
+def propagate_amps_in_free_space(amps, distnce, basis, wavelength, period):
+    k0 = 2 * np.pi / wavelength
+    lattice_k = 2 * np.pi / period
+    kx, ky = basis.T * lattice_k
+    kz = np.sqrt(k0 ** 2 - kx ** 2 - ky ** 2, dtype=complex)
+    propagated_amps = amps * jnp.exp(1j * kz * distnce)
+    return propagated_amps
+
+
 if __name__ == '__main__':
     jnp.set_printoptions(linewidth=1000)
 
