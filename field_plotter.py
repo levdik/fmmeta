@@ -1,7 +1,5 @@
 import numpy as np
 
-from phase_profile_manager import angle_to_standard_range
-
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.colors import hsv_to_rgb
@@ -24,7 +22,9 @@ def plot_field_amp_phase(*args, wavelength_nm=None, map_bounds=(0, 1, 0, 1), amp
 
 def plot_field_amp_phase_difference_db(field1, field2, map_bounds=(0, 1, 0, 1), **kwargs):
     fig, ax = plt.subplots(1, 2)
-    phase_plot = ax[0].imshow(10 * np.log10(angle_to_standard_range(np.angle(field1) - np.angle(field2))),
+    phase_diff = np.angle(field1) - np.angle(field2)
+    phase_diff = (phase_diff - np.pi) % (2 * np.pi) - np.pi  # angles to (-pi, pi]
+    phase_plot = ax[0].imshow(10 * np.log10(phase_diff),
                               extent=map_bounds, origin='lower', interpolation='nearest', cmap='inferno', **kwargs)
     amp_plot = ax[1].imshow(10 * np.log10(np.abs(np.abs(field1) - np.abs(field2))),
                             extent=map_bounds, origin='lower', interpolation='nearest', cmap='inferno', **kwargs)
