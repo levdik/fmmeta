@@ -31,7 +31,6 @@ def prepare_lens_scattering_solver(
 
     basis_indices_norm = np.linalg.norm(expansion.basis_coefficients, axis=-1)
     n_propagating_waves = np.count_nonzero(basis_indices_norm < period / wavelength)
-    # propagating_basis_indices = jnp.array(expansion.basis_coefficients[:n_propagating_waves])
 
     in_plane_wavevector = jnp.array([0., 0.])
     solve_result_ambient = fmm.eigensolve_isotropic_media(
@@ -68,8 +67,7 @@ def prepare_lens_scattering_solver(
         s_matrices_interior = scattering.stack_s_matrices_interior(
             layer_solve_results=[
                 solve_result_ambient, solve_result_substrate, solve_result_crystal, solve_result_ambient],
-            layer_thicknesses=[
-                0., substrate_thickness, lens_thickness, 0.]  # type: ignore[arg-type]
+            layer_thicknesses=[0., substrate_thickness, lens_thickness, 0.]  # type: ignore[arg-type]
         )
         amplitudes_interior = fields.stack_amplitudes_interior(
             s_matrices_interior=s_matrices_interior,
@@ -96,6 +94,6 @@ def prepare_lens_scattering_solver(
     return lens_pattern_to_scattered_amps_func, expansion.basis_coefficients[:n_propagating_waves]
 
 
-def simulate_field_crossection_along_propagation():
+def simulate_field_cross_section_along_propagation():
     # TODO
     pass

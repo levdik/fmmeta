@@ -24,7 +24,7 @@ if __name__ == '__main__':
 
     # tolopoly_parametrization = lens_topology_parametrization.BicubicInterpolationTopologyParametrization(
     #     grid_size=grid_size, symmetry_type='central')
-    tolopoly_parametrization = lens_topology_parametrization.FourierInterpolationTopologyParametrization(
+    tolopoly_parametrization = lens_topology_parametrization.FourierInterpolationTP(
         grid_size=grid_size, symmetry_type='central')
     simulate_lens_scattering, propagating_basis_indices = prepare_lens_scattering_solver(
         wavelength=wavelength,

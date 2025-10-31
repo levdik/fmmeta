@@ -1,5 +1,3 @@
-from xmlrpc.client import Boolean
-
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -7,8 +5,10 @@ from abc import ABC, abstractmethod
 
 
 class TopologyParametrization(ABC):
-    def __init__(self, n_geometrical_parameters: int):
+    def __init__(self, n_geometrical_parameters: int, minval=-1., maxval=1.):
         self.n_geometrical_parameters = n_geometrical_parameters
+        self.minval = minval
+        self.maxval = maxval
 
     def apply_symmetry(self, geometrical_parameters: jnp.ndarray) -> jnp.ndarray:
         return geometrical_parameters
@@ -26,7 +26,7 @@ class TopologyParametrization(ABC):
         return filling_map
 
 
-class CutoffTopologyParametrization(TopologyParametrization):
+class CutoffTP(TopologyParametrization):
     @abstractmethod
     def _generate_pattern_cutoff_values(self, geometrical_parameters: jnp.ndarray, n_samples: int) -> jnp.ndarray:
         pass
@@ -50,7 +50,7 @@ class CutoffTopologyParametrization(TopologyParametrization):
         return filling_map
 
 
-class GridTopologyParametrization(TopologyParametrization):
+class GridTP(TopologyParametrization):
     def __init__(self, grid_size: int, symmetry_type: str | None = None):
         if symmetry_type is None:
             unique_ids = np.arange(grid_size ** 2).reshape(grid_size, grid_size)
@@ -68,8 +68,9 @@ class GridTopologyParametrization(TopologyParametrization):
         else:
             raise ValueError("Unknown symmetry type. Allowed values: None, 'main_diagonal', 'central'")
 
-        _, unique_parameter_indices, symmetry_indices  = np.unique(unique_ids, return_index=True, return_inverse=True)
+        _, unique_parameter_indices, symmetry_indices = np.unique(unique_ids, return_index=True, return_inverse=True)
 
+        self.grid_size = grid_size
         self.symmetry_indices = jnp.array(symmetry_indices)
         self.unique_parameter_indices = unique_parameter_indices
         n_geometrical_parameters = len(unique_parameter_indices)
@@ -82,9 +83,9 @@ class GridTopologyParametrization(TopologyParametrization):
         return full_geometrical_parameters[self.unique_parameter_indices]
 
 
-class BicubicInterpolationTopologyParametrization(CutoffTopologyParametrization, GridTopologyParametrization):
+class BicubicInterpolationTP(CutoffTP, GridTP):
     def __init__(self, grid_size: int, symmetry_type: str | None = None):
-        GridTopologyParametrization.__init__(self, grid_size, symmetry_type)
+        GridTP.__init__(self, grid_size, symmetry_type)
 
     def _generate_pattern_cutoff_values(self, geometrical_parameters: jnp.ndarray, n_samples: int) -> jnp.ndarray:
         n_pad = 2
@@ -103,9 +104,9 @@ class BicubicInterpolationTopologyParametrization(CutoffTopologyParametrization,
         return interpolated
 
 
-class FourierInterpolationTopologyParametrization(CutoffTopologyParametrization, GridTopologyParametrization):
+class FourierInterpolationTP(CutoffTP, GridTP):
     def __init__(self, grid_size: int, symmetry_type: str | None = None):
-        GridTopologyParametrization.__init__(self, grid_size, symmetry_type)
+        GridTP.__init__(self, grid_size, symmetry_type)
 
     def _generate_pattern_cutoff_values(self, geometrical_parameters: jnp.ndarray, n_samples: int) -> jnp.ndarray:
         n_primary_samples = geometrical_parameters.shape[0]
@@ -127,7 +128,7 @@ class FourierInterpolationTopologyParametrization(CutoffTopologyParametrization,
         return interpolated_values
 
 
-class FourierExpansionTopologyParametrization(CutoffTopologyParametrization):
+class FourierExpansionTP(CutoffTP):
     @staticmethod
     def generate_basis_indices(r):
         n_max = int(np.floor(r))
@@ -142,7 +143,7 @@ class FourierExpansionTopologyParametrization(CutoffTopologyParametrization):
 
     @staticmethod
     def generate_primary_basis_indices(r, symmetry_type='central'):
-        full_basis_indices = FourierExpansionTopologyParametrization.generate_basis_indices(r)
+        full_basis_indices = FourierExpansionTP.generate_basis_indices(r)
         symmetry_indices = np.zeros(len(full_basis_indices), dtype=int)
         primary_basis = []
 
@@ -183,7 +184,7 @@ class FourierExpansionTopologyParametrization(CutoffTopologyParametrization):
     def __init__(self, r_max, symmetry_type='central'):
         (
             full_basis_indices, primary_basis, symmetry_indices
-        ) = FourierExpansionTopologyParametrization.generate_primary_basis_indices(r_max, symmetry_type)
+        ) = FourierExpansionTP.generate_primary_basis_indices(r_max, symmetry_type)
         self.full_basis_indices = full_basis_indices
         self.primary_basis = primary_basis
         self.symmetry_indices = symmetry_indices
@@ -224,16 +225,131 @@ class FourierExpansionTopologyParametrization(CutoffTopologyParametrization):
         return wave_values
 
 
-if __name__ == '__main__':
-    # topology_parametrization = BicubicInterpolationTopologyParametrization(grid_size=10, symmetry_type='central')
-    topology_parametrization = FourierInterpolationTopologyParametrization(grid_size=15, symmetry_type='main_diagonal')
-    # topology_parametrization = FourierExpansionTopologyParametrization(r_max=2, symmetry_type='main_diagonal')
+class CrossPillarWithHoleTP(GridTP):
+    def __init__(self, grid_size: int, symmetry_type: str | None = None):
+        GridTP.__init__(self, grid_size, symmetry_type)
+        self.n_unique_pillars = self.n_geometrical_parameters
+        self.n_geometrical_parameters = 4 * self.n_geometrical_parameters
+        self.minval = 0
 
+    def apply_symmetry(self, geometrical_parameters: jnp.ndarray) -> jnp.ndarray:
+        geometrical_parameters = geometrical_parameters.reshape(self.n_unique_pillars, 4)
+        a = geometrical_parameters[..., 0]
+        b = geometrical_parameters[..., 1]
+        ah = geometrical_parameters[..., 2]
+        bh = geometrical_parameters[..., 3]
+        geometrical_parameters = geometrical_parameters.at[..., 1].set(b * (1 - a) / 2)
+        geometrical_parameters = geometrical_parameters.at[..., 2].set(ah * a)
+        geometrical_parameters = geometrical_parameters.at[..., 3].set(bh * (a - ah * a) / 2)
+        return GridTP.apply_symmetry(self, geometrical_parameters)
+
+    @staticmethod
+    def _box_filling_map(
+            relative_width: jnp.ndarray,
+            relative_height: jnp.ndarray,
+            n_pixels: int
+    ) -> jnp.ndarray:
+        assert jnp.shape(relative_width) == ()
+        assert jnp.shape(relative_height) == ()
+
+        single_coordinate_samples = jnp.linspace(-0.5, 0.5, n_pixels, endpoint=False) + 0.5 / n_pixels
+        x_mesh, y_mesh = jnp.meshgrid(single_coordinate_samples, single_coordinate_samples)
+        horizontal_side_y = relative_height / 2
+        vertical_side_x = relative_width / 2
+        signed_distance_to_closest_horizontal_side_px = (horizontal_side_y - jnp.abs(y_mesh)) * n_pixels
+        signed_distance_to_closest_vertical_side_px = (vertical_side_x - jnp.abs(x_mesh)) * n_pixels
+        vertical_filling = jnp.clip(signed_distance_to_closest_vertical_side_px + 0.5, 0., 1.)
+        horizontal_filling = jnp.clip(signed_distance_to_closest_horizontal_side_px + 0.5, 0., 1.)
+        box_filling = vertical_filling * horizontal_filling
+        return box_filling
+
+    @staticmethod
+    def _cross_filling_map(
+            relative_outer_side_width: jnp.ndarray,
+            relative_corner_width: jnp.ndarray,
+            n_pixels: int
+    ) -> jnp.ndarray:
+        assert jnp.shape(relative_outer_side_width) == ()
+        assert jnp.shape(relative_corner_width) == ()
+
+        cross_width = 2 * relative_corner_width + relative_outer_side_width
+        horizontal_box_filling_map = CrossPillarWithHoleTP._box_filling_map(
+            relative_width=cross_width,
+            relative_height=relative_outer_side_width,
+            n_pixels=n_pixels
+        )
+        vertical_box_filling_map = horizontal_box_filling_map.T
+        cross_filling_map = 1. - (1. - vertical_box_filling_map) * (1. - horizontal_box_filling_map)
+        return cross_filling_map
+
+    @staticmethod
+    def _cross_with_hole_filling_map(
+            relative_shape: jnp.ndarray,
+            n_pixels: int
+    ) -> jnp.ndarray:
+        cross_filling = CrossPillarWithHoleTP._cross_filling_map(
+            relative_outer_side_width=relative_shape[0],
+            relative_corner_width=relative_shape[1],
+            n_pixels=n_pixels
+        )
+        hole_filling = 1. - CrossPillarWithHoleTP._cross_filling_map(
+            relative_outer_side_width=relative_shape[2],
+            relative_corner_width=relative_shape[3],
+            n_pixels=n_pixels
+        )
+        cross_with_hole_filling = cross_filling * hole_filling
+        return cross_with_hole_filling
+
+    def _generate_filling_map(self, geometrical_parameters: jnp.ndarray, n_samples: int) -> jnp.ndarray:
+        n_pixels_per_pillar = round(n_samples / self.grid_size)
+        geometrical_parameters = geometrical_parameters.reshape(-1, 4)
+        filling_blocks_flat = jax.vmap(
+            CrossPillarWithHoleTP._cross_with_hole_filling_map,
+            in_axes=(0, None)
+        )(
+            geometrical_parameters, n_pixels_per_pillar
+        )
+        filling_blocks = filling_blocks_flat.reshape(
+            self.grid_size, self.grid_size, n_pixels_per_pillar, n_pixels_per_pillar
+        )
+        filling = filling_blocks.transpose(0, 2, 1, 3).reshape(
+            self.grid_size * n_pixels_per_pillar, self.grid_size * n_pixels_per_pillar
+        )
+        filling = jax.image.resize(filling, shape=(n_samples, n_samples), method='linear')
+        return filling
+
+
+class SquarePillarTP(CrossPillarWithHoleTP):
+    def __init__(self, grid_size: int, symmetry_type: str | None = None):
+        CrossPillarWithHoleTP.__init__(self, grid_size, symmetry_type)
+        self.n_geometrical_parameters = self.n_geometrical_parameters // 4
+
+    def apply_symmetry(self, geometrical_parameters: jnp.ndarray) -> jnp.ndarray:
+        geometrical_parameters = jnp.stack(
+            [geometrical_parameters] + 3 * [jnp.zeros_like(geometrical_parameters)],
+            axis=-1
+        )
+        return CrossPillarWithHoleTP.apply_symmetry(self, geometrical_parameters)
+
+
+if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import matplotlib
+
     matplotlib.use('TkAgg')
 
-    fig, ax = plt.subplots(5, 5)
+    # topology_parametrization = CrossPillarWithHoleTP(grid_size=2, symmetry_type=None)
+    # pattern = topology_parametrization(jnp.array([[0.5, 0, 0, 0], [0.5, 0.2, 0, 0], [1, 0, 0.5, 0], [1, 0, 0.5, 0.2]]))
+    # plt.imshow(pattern)
+    # plt.show()
+    # exit()
+
+    # topology_parametrization = BicubicInterpolationTP(grid_size=10, symmetry_type='central')
+    # topology_parametrization = FourierInterpolationTP(grid_size=15, symmetry_type='main_diagonal')
+    # topology_parametrization = FourierExpansionTP(r_max=2, symmetry_type='main_diagonal')
+    topology_parametrization = SquarePillarTP(grid_size=8, symmetry_type='central')
+
+    fig, ax = plt.subplots(2, 2)
     rng_key = jax.random.key(0)
 
     for ax_i in ax.flatten():
@@ -241,9 +357,9 @@ if __name__ == '__main__':
         x = jax.random.uniform(
             rng_subkey,
             shape=(topology_parametrization.n_geometrical_parameters,),
-            minval=-1, maxval=1
+            minval=0, maxval=1
         )
-        y = topology_parametrization(x)
+        y = topology_parametrization(x, n_samples=128)
         # y = topology_parametrization._generate_pattern_cutoff_values(topology_parametrization.apply_symmetry(x), 100)
         # fig, ax = plt.subplots(1, 2)
         # ax[0].imshow(topology_parametrization.apply_symmetry(x))
