@@ -139,6 +139,8 @@ class FourierExpansion(Cutoff):
             for m in single_index_range:
                 if n ** 2 + m ** 2 <= r ** 2:
                     basis_indices.append((n, m))
+        basis_indices = np.array(basis_indices)
+        basis_indices = basis_indices[np.argsort(np.linalg.norm(basis_indices, axis=-1))]
         return basis_indices
 
     @staticmethod
@@ -193,12 +195,12 @@ class FourierExpansion(Cutoff):
 
     def apply_symmetry(self, geometrical_parameters: jnp.ndarray) -> jnp.ndarray:
         a_00 = geometrical_parameters[0]
-        comples_geometrical_parameters = jnp.concatenate([
+        complex_geometrical_parameters = jnp.concatenate([
             jnp.atleast_1d(a_00),
             geometrical_parameters[1:self.n_primary_parameters]
             + 1j * geometrical_parameters[self.n_primary_parameters:]
         ])
-        return comples_geometrical_parameters[self.symmetry_indices]
+        return complex_geometrical_parameters[self.symmetry_indices]
 
     def extract_unique_parameters(self, full_geometrical_parameters: jnp.ndarray) -> jnp.ndarray:
         raise NotImplemented
@@ -332,7 +334,24 @@ class SquarePillar(CrossPillarWithHole):
         return CrossPillarWithHole.apply_symmetry(self, geometrical_parameters)
 
 
+class CrossPillar(CrossPillarWithHole):
+    def __init__(self, grid_size: int, symmetry_type: str | None = None):
+        CrossPillarWithHole.__init__(self, grid_size, symmetry_type)
+        self.n_geometrical_parameters = self.n_geometrical_parameters // 2
+
+    def apply_symmetry(self, geometrical_parameters: jnp.ndarray) -> jnp.ndarray:
+        geometrical_parameters = jnp.stack(
+            [geometrical_parameters[:self.n_unique_pillars], geometrical_parameters[self.n_unique_pillars:]]
+            + 2 * [jnp.zeros(self.n_unique_pillars)],
+            axis=-1
+        )
+        return CrossPillarWithHole.apply_symmetry(self, geometrical_parameters)
+
+
 if __name__ == '__main__':
+    # print(FourierExpansion.generate_primary_basis_indices(10, 'main_diagonal'))
+    # exit()
+
     import matplotlib.pyplot as plt
     import matplotlib
 
@@ -347,7 +366,8 @@ if __name__ == '__main__':
     # topology_parametrization = BicubicInterpolation(grid_size=10, symmetry_type='central')
     # topology_parametrization = FourierInterpolation(grid_size=15, symmetry_type='main_diagonal')
     # topology_parametrization = FourierExpansion(r_max=2, symmetry_type='main_diagonal')
-    topology_parametrization = SquarePillar(grid_size=8, symmetry_type='central')
+    # topology_parametrization = SquarePillar(grid_size=8, symmetry_type='central')
+    topology_parametrization = CrossPillar(grid_size=8, symmetry_type='central')
 
     fig, ax = plt.subplots(2, 2)
     rng_key = jax.random.key(0)
