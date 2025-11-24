@@ -25,6 +25,8 @@ class TopologyParametrization(ABC):
         filling_map = self._generate_filling_map(geometrical_parameters, n_samples, **kwargs)
         return filling_map
 
+    def
+
 
 class Cutoff(TopologyParametrization):
     @abstractmethod
@@ -193,6 +195,26 @@ class FourierExpansion(Cutoff):
         self.n_primary_parameters = len(primary_basis)
         TopologyParametrization.__init__(self, n_geometrical_parameters=2 * len(primary_basis) - 1)
 
+    @staticmethod
+    def params_to_complex(geometrical_parameters):
+        a_00 = geometrical_parameters[0]
+        n_primary_parameters = geometrical_parameters.shape[-1] // 2 + 1
+        complex_geometrical_parameters = jnp.concatenate([
+            jnp.atleast_1d(a_00),
+            geometrical_parameters[1:n_primary_parameters]
+            + 1j * geometrical_parameters[n_primary_parameters:]
+        ])
+        return complex_geometrical_parameters
+
+    @staticmethod
+    def params_from_complex(complex_geometrical_parameters):
+        geometrical_parameters = jnp.hstack([
+            complex_geometrical_parameters[..., 0][..., None].astype(float),
+            complex_geometrical_parameters[..., 1:].real,
+            complex_geometrical_parameters[..., 1:].imag
+        ])
+        return geometrical_parameters
+
     def apply_symmetry(self, geometrical_parameters: jnp.ndarray) -> jnp.ndarray:
         a_00 = geometrical_parameters[0]
         complex_geometrical_parameters = jnp.concatenate([
@@ -349,6 +371,10 @@ class CrossPillar(CrossPillarWithHole):
 
 
 if __name__ == '__main__':
+    # print(FourierExpansion.params_from_complex(jnp.array([1, 2+3j, 0-7j])))
+    # print(FourierExpansion.params_to_complex(jnp.array([1, 2, 0, 3, -7])))
+    # exit()
+
     # print(FourierExpansion.generate_primary_basis_indices(10, 'main_diagonal'))
     # exit()
 

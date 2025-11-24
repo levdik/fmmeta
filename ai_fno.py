@@ -133,14 +133,18 @@ class RealToComplexFNO(nnx.Module):
 
 class PatternToAmpsFNO(nnx.Module):
     def __init__(
-            self, hidden_n_channels: tuple[int], n_pixels: int, mode_threshold: float,
+            self, hidden_n_channels: tuple[int], n_pixels: int, mode_threshold: float, n_propagating_modes: int,
             activation_fn: Callable, rngs: nnx.Rngs
     ):
         self.fno = FourierNeuralOperator(1, 2, hidden_n_channels, n_pixels, mode_threshold, activation_fn, rngs)
         self.propagating_indices = np.array([
-            [0, -1,  0,  0,  1, -1, -1,  1,  1, -2,  0,  0,  2, -2, -2, -1, -1,  1,  1,  2,  2, -2, -2,  2,  2, -3,  0,  0,  3],
-            [0,  0, -1,  1,  0, -1,  1, -1,  1,  0, -2,  2,  0, -1,  1, -2,  2, -2,  2, -1,  1, -2,  2, -2,  2,  0, -3,  3,  0]
-        ])
+            [0, -1, 0, 0, 1, -1, -1, 1, 1, -2, 0, 0, 2, -2, -2, -1, -1, 1, 1, 2, 2, -2, -2, 2, 2, -3, 0, 0, 3, -3,
+             -3, -1, -1, 1, 1, 3, 3, -3, -3, -2, -2, 2, 2, 3, 3, -4, 0, 0, 4, -4, -4, -1, -1, 1, 1, 4, 4, -3, -3, 3,
+             3],
+            [0, 0, -1, 1, 0, -1, 1, -1, 1, 0, -2, 2, 0, -1, 1, -2, 2, -2, 2, -1, 1, -2, 2, -2, 2, 0, -3, 3, 0, -1,
+             1, -3, 3, -3, 3, -1, 1, -2, 2, -3, 3, -3, 3, -2, 2, 0, -4, 4, 0, -1, 1, -4, 4, -4, 4, -1, 1, -3, 3, -3,
+             3]
+        ])[:, :n_propagating_modes]
 
     def __call__(self, x: jax.Array) -> jax.Array:
         x = (self.fno(x[..., jnp.newaxis]))

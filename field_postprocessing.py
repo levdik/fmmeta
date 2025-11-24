@@ -48,7 +48,7 @@ def make_jit_focusing_efficiency_function(basis_indices, relative_focal_point=(0
 
 def intensity_map_from_fourier_amplitudes(amplitudes, basis_indices, n_samples=100):
     single_coordinate_samples = np.linspace(0, 1, n_samples)
-    x_mesh, y_mesh = np.meshgrid(single_coordinate_samples, single_coordinate_samples)
+    x_mesh, y_mesh = np.meshgrid(single_coordinate_samples, single_coordinate_samples, indexing='ij')
     field_map = np.zeros((n_samples, n_samples), dtype=complex)
 
     for a, (n, m) in zip(amplitudes, basis_indices):

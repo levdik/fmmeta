@@ -17,22 +17,26 @@ import matplotlib.pyplot as plt
 import matplotlib
 
 matplotlib.use('TkAgg')
+jax.config.update('jax_enable_x64', True)
 
 
 def load_fno_model(state_restored=None):
     if state_restored is None:
-        # with open('ai_models_fno/fno_red_pattern_to_amps_1_0_trans_in_loss.pkl', 'rb') as f:
-        with open('ai_models_fno/fno_red_pattern_to_amps_not_normalized.pkl', 'rb') as f:
+        # with open('ai_models/fno_green_1_0_trans_in_loss.pkl', 'rb') as f:
+        # with open('ai_models/fno_red_pattern_to_amps_1_0_trans_in_loss.pkl', 'rb') as f:
+        with open('ai_models/fno_red.pkl', 'rb') as f:
             state_restored = pickle.load(f)
 
     model = PatternToAmpsFNO(
         hidden_n_channels=[64] * 5,
         n_pixels=64,
         mode_threshold=16,
+        n_propagating_modes=29,
         activation_fn=nnx.gelu,
         rngs=nnx.Rngs(0)
     )
 
+    model.propagating_indices = state_restored.propagating_indices
     model.fno.lifting.kernel = nnx.Param(state_restored.fno.lifting.kernel.value)
     model.fno.projection.kernel = nnx.Param(state_restored.fno.projection.kernel.value)
     for i in range(len(state_restored.fno.fourier_layers)):
@@ -51,7 +55,7 @@ def load_cnn_trans_model(state_restored=None):
     graphdef, abstract_state = nnx.split(abstract_model)
 
     if state_restored is None:
-        with open('ai_models_fno/trans_cnn_model.pkl', 'rb') as f:
+        with open('ai_models/trans_cnn_model.pkl', 'rb') as f:
             state_restored = pickle.load(f)
 
     model = nnx.merge(graphdef, state_restored)
@@ -59,7 +63,7 @@ def load_cnn_trans_model(state_restored=None):
 
 
 def load_hybrid_model():
-    with open('ai_models_fno/fno_cnn_hybrid.pkl', 'rb') as f:
+    with open('ai_models/fno_cnn_hybrid.pkl', 'rb') as f:
         state_restored = pickle.load(f)
 
     fno = load_fno_model(state_restored.fno)
@@ -75,18 +79,18 @@ if __name__ == '__main__':
     # trans_cnn = load_cnn_trans_model()
 
     # topology = topology_parametrization.FourierInterpolation(grid_size=10, symmetry_type='main_diagonal')
-    # topology = topology_parametrization.FourierExpansion(r_max=10, symmetry_type='central')
+    topology = topology_parametrization.FourierExpansion(r_max=5, symmetry_type='central')
     # topology = topology_parametrization.BicubicInterpolation(grid_size=10, symmetry_type='main_diagonal')
     # topology = topology_parametrization.SquarePillar(grid_size=8, symmetry_type='central')
-    topology = topology_parametrization.CrossPillar(grid_size=8, symmetry_type='central')
+    # topology = topology_parametrization.CrossPillar(grid_size=8, symmetry_type='central')
 
-    # x = jax.random.uniform(
-    #     jax.random.key(0),
-    #     shape=(topology.n_geometrical_parameters,),
-    #     minval=topology.minval / 2,
-    #     maxval=topology.maxval / 2
-    # )
-    x = 0.5 * jnp.ones(topology.n_geometrical_parameters)
+    x = jax.random.uniform(
+        jax.random.key(0),
+        shape=(topology.n_geometrical_parameters,),
+        minval=topology.minval / 2,
+        maxval=topology.maxval / 2
+    )
+    # x = 0.5 * jnp.ones(topology.n_geometrical_parameters)
 
     simulate_scattering, expansion = prepare_lens_scattering_solver(
         wavelength=650,
@@ -141,6 +145,8 @@ if __name__ == '__main__':
             x, topology.minval, topology.maxval)
     )
 
+    # print(optimized_x.__repr__())
+
     def calculate_true_eff(x):
         pattern = topology(x)
         amps = simulate_scattering(pattern)
@@ -152,19 +158,22 @@ if __name__ == '__main__':
         target_function=calculate_true_eff,
         x_init=optimized_x,
         learning_rate=1e-2,
-        n_steps=100,
-        boundary_projection_function=lambda x: jnp.clip(x, -1, 1)
+        n_steps=30,
+        boundary_projection_function=lambda x: jnp.clip(
+            x, topology.minval, topology.maxval)
     )
+    jnp.set_printoptions(linewidth=10000)
+    print(reoptimized_x.__repr__())
 
-    # optimized_pattern = topology(optimized_x, n_samples=64)
-    # pred_amps = model(optimized_pattern[None, :])[0]
-    # pred_amps = propagate_amps_in_free_space(pred_amps, 2500, expansion, 650, 2000)
-    # pred_foc_eff = calculate_focusing_efficiency(pred_amps, expansion)
-    # pred_trans_eff = np.sum(np.abs(pred_amps) ** 2)
-    # # pred_trans_eff = trans_cnn(optimized_pattern)
-    # print(pred_foc_eff, pred_trans_eff, pred_foc_eff * pred_trans_eff)
-    #
-    # true_amps = simulate_scattering(topology(optimized_x))
-    # true_foc_eff = calculate_focusing_efficiency(true_amps, expansion)
-    # true_trans_eff = np.sum(np.abs(true_amps) ** 2)
-    # print(true_foc_eff, true_trans_eff, true_foc_eff * true_trans_eff)
+    optimized_pattern = topology(optimized_x, n_samples=64)
+    pred_amps = model(optimized_pattern[None, :])[0]
+    pred_amps = propagate_amps_in_free_space(pred_amps, 2500, expansion, 650, 2000)
+    pred_foc_eff = calculate_focusing_efficiency(pred_amps, expansion)
+    pred_trans_eff = np.sum(np.abs(pred_amps) ** 2)
+    # pred_trans_eff = trans_cnn(optimized_pattern)
+    print(pred_foc_eff, pred_trans_eff, pred_foc_eff * pred_trans_eff)
+
+    true_amps = simulate_scattering(topology(optimized_x))
+    true_foc_eff = calculate_focusing_efficiency(true_amps, expansion)
+    true_trans_eff = np.sum(np.abs(true_amps) ** 2)
+    print(true_foc_eff, true_trans_eff, true_foc_eff * true_trans_eff)

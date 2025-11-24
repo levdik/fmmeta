@@ -52,7 +52,7 @@ class HybridFNOCNN(nnx.Module):
 def train_trans_cnn(training_dataset_path):
     rngs = nnx.Rngs(42)
     checkpointer = ocp.StandardCheckpointer()
-    checkpoint_dir = 'C:/Users/eugene/PycharmProjects/fmmeta/ai_models_fno/'
+    checkpoint_dir = '/ai_models/'
 
     data = np.load(training_dataset_path)
     x_data = jnp.array(data['patterns'].astype(float))
@@ -118,7 +118,7 @@ if __name__ == '__main__':
     abstract_model = nnx.eval_shape(lambda: MetasurfaceTransmissionCNN(rngs=nnx.Rngs(0)))
     graphdef, abstract_state = nnx.split(abstract_model)
     checkpointer = ocp.StandardCheckpointer()
-    checkpoint_dir = 'C:/Users/eugene/PycharmProjects/fmmeta/ai_models_fno/'
+    checkpoint_dir = '/ai_models/'
     state_restored = checkpointer.restore(checkpoint_dir + 'trans_cnn_checkpoint', abstract_state)
     model = nnx.merge(graphdef, state_restored)
     print(model)

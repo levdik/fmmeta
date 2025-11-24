@@ -250,7 +250,7 @@ def load_and_save_as_maps():
     n_propagating_waves = np.count_nonzero(basis_indices_norm < period / wavelength)
     expansion = expansion.basis_coefficients[:n_propagating_waves]
 
-    data = np.load('wave_pattern_training_data/wave_red_30k.npz')
+    data = np.load('ai_data_archive/wave_pattern_training_data/wave_red_30k.npz')
     pattern_amps = data['primary_pattern_amps']
     field_amps = data['scattered_field_amps']
     field_amps = field_amps[:, :len(expansion)] + 1j * field_amps[:, len(expansion):]
@@ -258,8 +258,8 @@ def load_and_save_as_maps():
     x = []
     y = []
 
-    for i in range(len(pattern_amps)):
-    # for i in range(1000):
+    # for i in range(len(pattern_amps)):
+    for i in range(2**12 + 128):
         if i % 100 == 0:
             print(i)
         pattern = generate_wave_permittivity_pattern(
@@ -292,16 +292,11 @@ def load_and_save_as_maps():
     x = np.stack(x)
     y = np.stack(y)
     print(x.shape, y.shape)
-    np.savez('wave_pattern_training_data/wave_red_30k_maps.npz', x=x, y=y)
+    # np.savez('wave_pattern_training_data/wave_red_30k_maps.npz', x=x, y=y)
+    np.savez('wave_maps_4224_64.npz', x=x)
 
 
 if __name__ == '__main__':
-    # TODO: choose wavelengths (either uniformly in the range or one of the samples in the eval)
-    #  and use refractiveindex2
-    # TODO: experiment with n_pixels
-
     # show_example_random_permittivity_patterns(shape=[4, 7])
-
     # run_batch_and_save(batch_size=2, key_seed=1)
-
     load_and_save_as_maps()

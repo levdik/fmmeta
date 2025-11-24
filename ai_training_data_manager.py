@@ -1,7 +1,5 @@
 import os
 
-import numpy
-
 n_cores = 8
 os.environ["XLA_FLAGS"] = f'--xla_force_host_platform_device_count={n_cores}'
 
@@ -12,6 +10,8 @@ import h5py
 
 from scattering_simulation import prepare_lens_scattering_solver
 import topology_parametrization
+
+from time import time
 
 jax.config.update('jax_enable_x64', True)
 
@@ -62,26 +62,32 @@ def simulate_in_parallel(patterns, batch_size, **sim_kwargs):
 
 
 if __name__ == '__main__':
-    from time import time
-    start = time()
+    all_patterns = np.load('wave_maps_4224.npz')['x']
+    print(all_patterns.shape)
 
-    r_max = 10
-    n_samples = 32
-    topology_params = generate_training_topology_params(r_max=r_max, n=n_samples, rng_key=jax.random.key(42))
-    patterns = generate_patterns_in_paralel(topology_params, r_max=r_max, resolution=128)
+    for i in range(33):
+        start = time()
 
-    scattered_amplitudes = simulate_in_parallel(
-        patterns=patterns,
-        batch_size=10,
-        wavelength=650,
-        period=2000,
-        lens_thickness=600,
-        substrate_thickness=500,
-        approximate_number_of_terms=600,
-    )
+        print(i)
+        r_max = 10
+        n_samples = 128
+        # topology_params = generate_training_topology_params(r_max=r_max, n=n_samples, rng_key=jax.random.key(i))
+        # patterns = generate_patterns_in_paralel(topology_params, r_max=r_max, resolution=100)
+        patterns = all_patterns[i * n_samples:(i + 1) * n_samples]
 
-    print(time() - start)
+        scattered_amplitudes = simulate_in_parallel(
+            patterns=patterns,
+            batch_size=8,
+            wavelength=550,
+            period=2000,
+            lens_thickness=600,
+            substrate_thickness=500,
+            approximate_number_of_terms=600,
+        )
 
-    with h5py.File(f'red.hdf5', 'a') as f:
-        f.create_dataset('topology_params', data=topology_params)
-        f.create_dataset('field_amps', data=scattered_amplitudes)
+        print(time() - start)
+
+        with h5py.File(f'ai_training_data/temp_batches/green_redmaps_{i}.hdf5', 'a') as f:
+            # f.create_dataset('topology_params', data=topology_params)
+            # f.create_dataset('patterns', data=patterns)
+            f.create_dataset('field_amps', data=scattered_amplitudes)
