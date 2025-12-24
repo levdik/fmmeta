@@ -252,14 +252,14 @@ def load_and_save_as_maps():
 
     data = np.load('ai_data_archive/wave_pattern_training_data/wave_red_30k.npz')
     pattern_amps = data['primary_pattern_amps']
-    field_amps = data['scattered_field_amps']
-    field_amps = field_amps[:, :len(expansion)] + 1j * field_amps[:, len(expansion):]
+    # field_amps = data['scattered_field_amps']
+    # field_amps = field_amps[:, :len(expansion)] + 1j * field_amps[:, len(expansion):]
 
     x = []
-    y = []
+    # y = []
 
     # for i in range(len(pattern_amps)):
-    for i in range(2**12 + 128):
+    for i in range(30000):
         if i % 100 == 0:
             print(i)
         pattern = generate_wave_permittivity_pattern(
@@ -267,13 +267,13 @@ def load_and_save_as_maps():
             basis_indices=full_basis_indices,
             permittivity=1.,
             permittivity_ambience=0.,
-            resolution=64
+            resolution=100
         )
         pattern = np.array(pattern)
 
-        field = np.zeros((64, 64), dtype=complex)
-        field[expansion[:, 0], expansion[:, 1]] = field_amps[i]
-        field = np.fft.ifft2(field) * (64 ** 2)
+        # field = np.zeros((64, 64), dtype=complex)
+        # field[expansion[:, 0], expansion[:, 1]] = field_amps[i]
+        # field = np.fft.ifft2(field) * (64 ** 2)
 
         # print(np.linalg.norm(
         #     np.fft.fft2(field)[expansion[:, 0], expansion[:, 1]]
@@ -287,13 +287,14 @@ def load_and_save_as_maps():
         # plt.show()
 
         x.append(pattern)
-        y.append(field)
+        # y.append(field)
 
     x = np.stack(x)
-    y = np.stack(y)
-    print(x.shape, y.shape)
+    # y = np.stack(y)
+    # print(x.shape, y.shape)
+    print(x.shape)
     # np.savez('wave_pattern_training_data/wave_red_30k_maps.npz', x=x, y=y)
-    np.savez('wave_maps_4224_64.npz', x=x)
+    np.savez('wave_maps_30k_64px.npz', x=x)
 
 
 if __name__ == '__main__':

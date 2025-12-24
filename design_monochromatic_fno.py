@@ -11,6 +11,7 @@ from field_postprocessing import calculate_focusing_efficiency, propagate_amps_i
 from design_optimizer import run_gradient_ascent
 import topology_parametrization
 from scattering_simulation import prepare_lens_scattering_solver
+from manufacturing_constraints import too_thin_area
 
 import pickle
 import matplotlib.pyplot as plt
@@ -24,11 +25,12 @@ def load_fno_model(state_restored=None):
     if state_restored is None:
         # with open('ai_models/fno_green_1_0_trans_in_loss.pkl', 'rb') as f:
         # with open('ai_models/fno_red_pattern_to_amps_1_0_trans_in_loss.pkl', 'rb') as f:
-        with open('ai_models/fno_red.pkl', 'rb') as f:
+        # with open('ai_models/fno_red.pkl', 'rb') as f:
+        with open('ai_models/fno_red_30k_32_x_9.pkl', 'rb') as f:
             state_restored = pickle.load(f)
 
     model = PatternToAmpsFNO(
-        hidden_n_channels=[64] * 5,
+        hidden_n_channels=[32] * 9,
         n_pixels=64,
         mode_threshold=16,
         n_propagating_modes=29,
@@ -79,16 +81,17 @@ if __name__ == '__main__':
     # trans_cnn = load_cnn_trans_model()
 
     # topology = topology_parametrization.FourierInterpolation(grid_size=10, symmetry_type='main_diagonal')
-    topology = topology_parametrization.FourierExpansion(r_max=5, symmetry_type='central')
+    # topology = topology_parametrization.FourierExpansion(r_max=5, symmetry_type='central')
     # topology = topology_parametrization.BicubicInterpolation(grid_size=10, symmetry_type='main_diagonal')
     # topology = topology_parametrization.SquarePillar(grid_size=8, symmetry_type='central')
     # topology = topology_parametrization.CrossPillar(grid_size=8, symmetry_type='central')
+    topology = topology_parametrization.GaussianField(100, 16, 'central')
 
     x = jax.random.uniform(
-        jax.random.key(0),
+        jax.random.key(8),
         shape=(topology.n_geometrical_parameters,),
-        minval=topology.minval / 2,
-        maxval=topology.maxval / 2
+        minval=topology.minval,
+        maxval=topology.maxval
     )
     # x = 0.5 * jnp.ones(topology.n_geometrical_parameters)
 
@@ -98,7 +101,7 @@ if __name__ == '__main__':
         lens_thickness=600,
         substrate_thickness=500,
         approximate_number_of_terms=300,
-        propagate_by_distance=2500
+        propagate_by_distance=3500
     )
 
 
@@ -128,12 +131,13 @@ if __name__ == '__main__':
         y = model(pattern[None, :])[0]
         # amps = jnp.fft.fft2(y)[expansion[:, 0], expansion[:, 1]] / (64 ** 2)
         amps = y
-        focal_amps = propagate_amps_in_free_space(amps, 2500, expansion, 650, 2000)
+        focal_amps = propagate_amps_in_free_space(amps, 3500, expansion, 650, 2000)
         transmission_efficiency = jnp.sum(jnp.abs(focal_amps) ** 2)
         # transmission_efficiency = jnp.clip(transmission_efficiency, 0, 1)
         # transmission_efficiency = trans_cnn(pattern)
         focusing_efficiency = calculate_focusing_efficiency(focal_amps, expansion)
-        return transmission_efficiency * focusing_efficiency
+        invalid_area = too_thin_area(topology(x, n_samples=100), 5)
+        return transmission_efficiency * focusing_efficiency - 4 * invalid_area
 
 
     optimized_x, optimized_eff = run_gradient_ascent(
@@ -148,32 +152,35 @@ if __name__ == '__main__':
     # print(optimized_x.__repr__())
 
     def calculate_true_eff(x):
-        pattern = topology(x)
+        pattern = topology(x, 100)
         amps = simulate_scattering(pattern)
         foc_eff = calculate_focusing_efficiency(amps, expansion)
         trans_eff = jnp.sum(jnp.abs(amps) ** 2)
-        return foc_eff * trans_eff
+        invalid_area = too_thin_area(pattern, 5)
+        return foc_eff * trans_eff - 4 * invalid_area
 
     reoptimized_x, reoptimized_eff = run_gradient_ascent(
         target_function=calculate_true_eff,
         x_init=optimized_x,
-        learning_rate=1e-2,
-        n_steps=30,
+        learning_rate=5e-3,
+        n_steps=100,
         boundary_projection_function=lambda x: jnp.clip(
             x, topology.minval, topology.maxval)
     )
-    jnp.set_printoptions(linewidth=10000)
-    print(reoptimized_x.__repr__())
+    # jnp.set_printoptions(linewidth=10000)
+    # print(reoptimized_x.__repr__())
+    plt.imshow(topology(optimized_x, 500))
+    plt.show()
 
-    optimized_pattern = topology(optimized_x, n_samples=64)
-    pred_amps = model(optimized_pattern[None, :])[0]
-    pred_amps = propagate_amps_in_free_space(pred_amps, 2500, expansion, 650, 2000)
-    pred_foc_eff = calculate_focusing_efficiency(pred_amps, expansion)
-    pred_trans_eff = np.sum(np.abs(pred_amps) ** 2)
-    # pred_trans_eff = trans_cnn(optimized_pattern)
-    print(pred_foc_eff, pred_trans_eff, pred_foc_eff * pred_trans_eff)
-
-    true_amps = simulate_scattering(topology(optimized_x))
-    true_foc_eff = calculate_focusing_efficiency(true_amps, expansion)
-    true_trans_eff = np.sum(np.abs(true_amps) ** 2)
-    print(true_foc_eff, true_trans_eff, true_foc_eff * true_trans_eff)
+    # optimized_pattern = topology(optimized_x, n_samples=64)
+    # pred_amps = model(optimized_pattern[None, :])[0]
+    # pred_amps = propagate_amps_in_free_space(pred_amps, 2500, expansion, 650, 2000)
+    # pred_foc_eff = calculate_focusing_efficiency(pred_amps, expansion)
+    # pred_trans_eff = np.sum(np.abs(pred_amps) ** 2)
+    # # pred_trans_eff = trans_cnn(optimized_pattern)
+    # print(pred_foc_eff, pred_trans_eff, pred_foc_eff * pred_trans_eff)
+    #
+    # true_amps = simulate_scattering(topology(optimized_x))
+    # true_foc_eff = calculate_focusing_efficiency(true_amps, expansion)
+    # true_trans_eff = np.sum(np.abs(true_amps) ** 2)
+    # print(true_foc_eff, true_trans_eff, true_foc_eff * true_trans_eff)

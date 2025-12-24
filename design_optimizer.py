@@ -29,7 +29,7 @@ def run_gradient_ascent(
         return x, opt_state, loss, grad
 
     x = x_init
-    max_f = 0.
+    max_f = -1e10
     best_x = x
 
     try:

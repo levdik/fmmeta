@@ -25,8 +25,6 @@ class TopologyParametrization(ABC):
         filling_map = self._generate_filling_map(geometrical_parameters, n_samples, **kwargs)
         return filling_map
 
-    def
-
 
 class Cutoff(TopologyParametrization):
     @abstractmethod
@@ -370,47 +368,81 @@ class CrossPillar(CrossPillarWithHole):
         return CrossPillarWithHole.apply_symmetry(self, geometrical_parameters)
 
 
+class GaussianField(Cutoff):
+    def __init__(self, n_pixels, sigma, symmetry_type=None):
+        self.n_pixels = n_pixels
+        self.sigma = sigma
+        self.symmetry_type = symmetry_type
+        TopologyParametrization.__init__(self, n_geometrical_parameters=n_pixels ** 2)
+
+        kx = jnp.fft.fftfreq(n_pixels)
+        kx, ky = jnp.meshgrid(kx, kx)
+        filter = jnp.exp(-0.25 * (sigma ** 2) * (kx ** 2 + ky ** 2))
+        self.fourier_filter = filter
+
+    def apply_symmetry(self, geometrical_parameters: jnp.ndarray) -> jnp.ndarray:
+        x = geometrical_parameters.reshape(self.n_pixels, self.n_pixels)
+        if self.symmetry_type is None:
+            pass
+        elif self.symmetry_type == 'central':
+            x = (x + x.T) / 2
+            x = (x + jnp.rot90(x, 2)) / 2
+            x = (x + jnp.flip(x, 0)) / 2
+        elif self.symmetry_type == 'main_diagonal':
+            x = (x + x.T) / 2
+        else:
+            raise ValueError('Unknown symmetry type')
+        return x
+
+    def _generate_pattern_cutoff_values(self, geometrical_parameters: jnp.ndarray, n_samples: int) -> jnp.ndarray:
+        filtered = jnp.fft.ifft2(self.fourier_filter * jnp.fft.fft2(geometrical_parameters)).real
+        return filtered * jnp.sqrt(self.fourier_filter.size / jnp.sum(jnp.abs(self.fourier_filter) ** 2))
+        # filtered = (filtered - jnp.min(filtered)) / (jnp.max(filtered) - jnp.min(filtered))
+        # filtered = filtered * 2 - 1
+        # return filtered
+
+    def _generate_filling_map(
+            self, geometrical_parameters: jnp.ndarray, n_samples: int, bin_strength: float = 1.
+    ) -> jnp.ndarray:
+        cutoff_values = self._generate_pattern_cutoff_values(geometrical_parameters, n_samples)
+        binarised_with_edges = Cutoff._generate_filling_map(self, geometrical_parameters, n_samples)
+        soft_binarized = bin_strength * binarised_with_edges + ((cutoff_values + 1) / 2) * (1 - bin_strength)
+        soft_binarized = jax.image.resize(soft_binarized, (n_samples, n_samples), method='linear')
+        return soft_binarized
+
+
 if __name__ == '__main__':
-    # print(FourierExpansion.params_from_complex(jnp.array([1, 2+3j, 0-7j])))
-    # print(FourierExpansion.params_to_complex(jnp.array([1, 2, 0, 3, -7])))
-    # exit()
-
-    # print(FourierExpansion.generate_primary_basis_indices(10, 'main_diagonal'))
-    # exit()
-
     import matplotlib.pyplot as plt
     import matplotlib
 
     matplotlib.use('TkAgg')
 
-    # topology_parametrization = CrossPillarWithHole(grid_size=2, symmetry_type=None)
-    # pattern = topology_parametrization(jnp.array([[0.5, 0, 0, 0], [0.5, 0.2, 0, 0], [1, 0, 0.5, 0], [1, 0, 0.5, 0.2]]))
-    # plt.imshow(pattern)
-    # plt.show()
-    # exit()
+    topology_parametrization = GaussianField(n_pixels=100, sigma=30, symmetry_type='main_diagonal')
 
-    # topology_parametrization = BicubicInterpolation(grid_size=10, symmetry_type='central')
-    # topology_parametrization = FourierInterpolation(grid_size=15, symmetry_type='main_diagonal')
-    # topology_parametrization = FourierExpansion(r_max=2, symmetry_type='main_diagonal')
-    # topology_parametrization = SquarePillar(grid_size=8, symmetry_type='central')
-    topology_parametrization = CrossPillar(grid_size=8, symmetry_type='central')
-
-    fig, ax = plt.subplots(2, 2)
-    rng_key = jax.random.key(0)
+    fig, ax = plt.subplots(5, 5)
+    rng_key = jax.random.key(3)
 
     for ax_i in ax.flatten():
+    # for ax_i in [ax]:
         rng_key, rng_subkey = jax.random.split(rng_key)
         x = jax.random.uniform(
             rng_subkey,
             shape=(topology_parametrization.n_geometrical_parameters,),
-            minval=0, maxval=1
+            minval=topology_parametrization.minval, maxval=topology_parametrization.maxval
         )
-        y = topology_parametrization(x, n_samples=128)
+
+        rng_key, rng_subkey = jax.random.split(rng_key)
+        filling_shift = jnp.clip(0.01 * jax.random.normal(rng_subkey), -1, 1)
+        # filling_shift = jax.random.uniform(rng_subkey, minval=-1, maxval=1)
+        x += filling_shift
+
+        y = topology_parametrization(x, n_samples=128, bin_strength=1)
+        print(np.min(y), np.max(y))
         # y = topology_parametrization._generate_pattern_cutoff_values(topology_parametrization.apply_symmetry(x), 100)
         # fig, ax = plt.subplots(1, 2)
         # ax[0].imshow(topology_parametrization.apply_symmetry(x))
         # ax[1].imshow(y)
-        ax_i.imshow(y)
+        ax_i.imshow(y, vmin=0, vmax=1)
         ax_i.set_axis_off()
 
     plt.tight_layout()
