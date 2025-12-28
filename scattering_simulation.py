@@ -15,7 +15,8 @@ def prepare_lens_scattering_solver(
         lens_thickness: float,
         substrate_thickness: float,
         approximate_number_of_terms: int,
-        propagate_by_distance: float = 0.
+        propagate_by_distance: float = 0.,
+        include_reflection=False
 ):
     lens_permittivity = SI3N4.get_refractive_index(wavelength_um=wavelength / 1000) ** 2
     permittivity_substrate = SIO2.get_refractive_index(wavelength_um=wavelength / 1000) ** 2
@@ -83,12 +84,33 @@ def prepare_lens_scattering_solver(
                 layer_solve_result=solve_result_ambient
             )
 
-        (_, trans_e_y, _), _ = fields.fields_from_wave_amplitudes(
-            forward_amplitude=trans_amps,
-            backward_amplitude=jnp.zeros_like(trans_amps),
+        # (trans_e_x, trans_e_y, _), _ = fields.fields_from_wave_amplitudes(
+        te, th = fields.fields_from_wave_amplitudes(
+            forward_amplitude=jnp.zeros_like(trans_amps),
+            backward_amplitude=trans_amps,
             layer_solve_result=solve_result_ambient
         )
-        propagating_trans_e_y_amps = trans_e_y[:n_propagating_waves].flatten()
+        # propagating_trans_e_x_amps = trans_e_x[:n_propagating_waves].flatten()
+        # propagating_trans_e_y_amps = trans_e_y[:n_propagating_waves].flatten()
+
+        if include_reflection:
+            ref_amps, _ = amplitudes_interior[-1]
+            re, rh = fields.fields_from_wave_amplitudes(
+            # (ref_e_x, ref_e_y, _), _ = fields.fields_from_wave_amplitudes(
+                forward_amplitude=ref_amps,
+                backward_amplitude=jnp.zeros_like(ref_amps),
+                layer_solve_result=solve_result_ambient
+            )
+            # propagating_ref_e_x_amps = ref_e_x[:n_propagating_waves].flatten()
+            # propagating_ref_e_y_amps = ref_e_y[:n_propagating_waves].flatten()
+            return jnp.array([
+                (te[0].squeeze(), te[1].squeeze(), te[2].squeeze()),
+                (th[0].squeeze(), th[1].squeeze(), th[2].squeeze()),
+                (re[0].squeeze(), re[1].squeeze(), re[2].squeeze()),
+                (rh[0].squeeze(), rh[1].squeeze(), rh[2].squeeze())
+            ])
+            # return propagating_trans_e_x_amps, propagating_trans_e_y_amps, propagating_ref_e_x_amps, propagating_ref_e_y_amps
+
         return propagating_trans_e_y_amps
 
     return lens_pattern_to_scattered_amps_func, expansion.basis_coefficients[:n_propagating_waves]
