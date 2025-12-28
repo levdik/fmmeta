@@ -417,7 +417,7 @@ if __name__ == '__main__':
 
     matplotlib.use('TkAgg')
 
-    topology_parametrization = GaussianField(n_pixels=100, sigma=30, symmetry_type='main_diagonal')
+    topology_parametrization = GaussianField(n_pixels=100, sigma=16, symmetry_type='main_diagonal')
 
     fig, ax = plt.subplots(5, 5)
     rng_key = jax.random.key(3)
