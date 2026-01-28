@@ -2,173 +2,162 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 from flax import nnx
-import optax
-
-import pickle
-
-from typing import Callable
 
 
-class FourierLinear(nnx.Module):
+class SpectralConv2D(nnx.Module):
+    def __init__(self, in_channels, out_channels, modes, rngs):
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.modes = modes
 
-    def __init__(
-            self,
-            n_in_channels: int,
-            n_out_channels: int,
-            n_pixels: int,
-            mode_threshold: float,
-            rngs: nnx.Rngs
-    ):
-        self.n_in_channels = n_in_channels
-        self.n_out_channels = n_out_channels
-
-        fourier_ix, fourier_iy = np.meshgrid(
-            np.fft.rfftfreq(n_pixels, 1 / n_pixels),
-            np.fft.fftfreq(n_pixels, 1 / n_pixels)
+        self.mode_transformation = nnx.Einsum(
+            '...nmi, nmio -> ...nmo',
+            kernel_shape=(modes, modes, in_channels, out_channels),
+            bias_shape=(modes, modes, out_channels),
+            param_dtype=jnp.complex64,
+            rngs=rngs
         )
-        mode_mask = fourier_ix ** 2 + fourier_iy ** 2 <= mode_threshold ** 2
-        # self.mode_mask = mode_mask
-        self.idx = np.where(mode_mask)
-        self.n_selected_modes = int(mode_mask.sum())
 
-        init_w_scale = 1 / (n_in_channels * n_out_channels)
-        init_w_kwargs = {
-            'shape': (self.n_selected_modes, n_in_channels, n_out_channels),
-            'minval': -init_w_scale, 'maxval': init_w_scale
-        }
-        self.w_re = nnx.Param(jax.random.uniform(rngs(), **init_w_kwargs))
-        self.w_im = nnx.Param(jax.random.uniform(rngs(), **init_w_kwargs))
+    def __call__(self, x):
+        n_px = x.shape[-2]
+        mode_start, mode_end = n_px // 2 - self.modes // 2, n_px // 2 + self.modes // 2
 
-    def __call__(self, x: jax.Array) -> jax.Array:  # x.shape: (*n_batch, n_pixels_x, n_pixels_y, n_in_channels)
-        x_fft = jnp.fft.rfft2(x, axes=(-3, -2))
-        x_fft_selected = x_fft[..., self.idx[0], self.idx[1], :]
+        x_fft = jnp.fft.fft2(x, axes=(-3, -2))
+        x_fft_shifted = jnp.fft.fftshift(x_fft, axes=(-3, -2))
+        x_fft_sliced = x_fft_shifted[..., mode_start:mode_end, mode_start:mode_end, :]
 
-        w = self.w_re + 1j * self.w_im
-        y_fft_selected = jnp.einsum('bfi, fio -> bfo', x_fft_selected, w)
-
-        y_fft = jnp.zeros(x.shape[:-3] + (x_fft.shape[-3], x_fft.shape[-2], self.n_out_channels), dtype=complex)
-        y_fft = y_fft.at[..., self.idx[0], self.idx[1], :].set(y_fft_selected)
-        y = jnp.fft.irfft2(y_fft, axes=(-3, -2))
+        y_fft_sliced = self.mode_transformation(x_fft_sliced)
+        y_fft_shifted = jnp.zeros(x.shape[:-1] + (self.out_channels,), dtype=complex)
+        y_fft_shifted = y_fft_shifted.at[..., mode_start:mode_end, mode_start:mode_end, :].set(y_fft_sliced)
+        y_fft = jnp.fft.ifftshift(y_fft_shifted, axes=(-3, -2))
+        y = jnp.fft.ifft2(y_fft, axes=(-3, -2)).real
 
         return y
 
 
-class FourierLayer(nnx.Module):
+class LinearAttention2D(nnx.Module):
+    def __init__(self, channels: int, num_heads: int, rngs: nnx.Rngs):
+        self.channels = channels
+        self.num_heads = num_heads
+        self.head_dim = channels // num_heads
 
-    def __init__(
-            self,
-            n_in_channels: int,
-            n_out_channels: int,
-            n_pixels: int,
-            mode_threshold: float,
-            activation_fn: Callable[jax.Array, jax.Array],
-            rngs: nnx.Rngs
-    ):
-        self.activation_fn = activation_fn
-        self.fourier_linear_block = FourierLinear(n_in_channels, n_out_channels, n_pixels, mode_threshold, rngs)
-        self.bypass_convolution = nnx.Conv(n_in_channels, n_out_channels, kernel_size=1, rngs=rngs)
-
-    def __call__(self, x: jax.Array) -> jax.Array:  # x.shape: (*n_batch, n_pixels_x, n_pixels_y, n_in_channels)
-        return self.activation_fn(
-            self.fourier_linear_block(x)
-            + self.bypass_convolution(x)
-        )
-
-
-class FourierNeuralOperator(nnx.Module):
-
-    def __init__(
-            self,
-            n_in_channels: int,
-            n_out_channels: int,
-            hidden_n_channels: tuple[int],
-            n_pixels: int,
-            mode_threshold: float,
-            activation_fn: Callable[jax.Array, jax.Array],
-            rngs: nnx.Rngs
-    ):
-        self.lifting = nnx.Conv(n_in_channels, hidden_n_channels[0], kernel_size=1, rngs=rngs)
-        self.fourier_layers = [
-            FourierLayer(hidden_n_channels[i], hidden_n_channels[i + 1], n_pixels, mode_threshold, activation_fn, rngs)
-            for i in range(len(hidden_n_channels) - 1)
-        ]
-        self.projection = nnx.Conv(hidden_n_channels[-1], n_out_channels, kernel_size=1, rngs=rngs)
-
-        self.n_selected_modes = self.fourier_layers[0].fourier_linear_block.n_selected_modes
+        self.q_proj = nnx.Linear(channels, channels, rngs=rngs)
+        self.k_proj = nnx.Linear(channels, channels, rngs=rngs)
+        self.v_proj = nnx.Linear(channels, channels, rngs=rngs)
+        self.out_proj = nnx.Linear(channels, channels, rngs=rngs)
 
     def __call__(self, x: jax.Array) -> jax.Array:
-        x = self.lifting(x)
-        for fourier_layer in self.fourier_layers:
-            x = fourier_layer(x)
+        B, H, W, C = x.shape
+        N = H * W
+        x_flat = x.reshape(B, N, C)
+
+        q = self.q_proj(x_flat)
+        k = self.k_proj(x_flat)
+        v = self.v_proj(x_flat)
+
+        q = q.reshape(B, N, self.num_heads, self.head_dim).transpose(0, 2, 1, 3)
+        k = k.reshape(B, N, self.num_heads, self.head_dim).transpose(0, 2, 1, 3)
+        v = v.reshape(B, N, self.num_heads, self.head_dim).transpose(0, 2, 1, 3)
+
+        q = jax.nn.elu(q) + 1.0
+        k = jax.nn.elu(k) + 1.0
+
+        context = jnp.einsum('bhnd, bhne -> bhde', k, v)
+
+        k_sum = jnp.einsum('bhnd -> bhd', k)
+        denom = jnp.einsum('bhnd, bhd -> bhn', q, k_sum)
+        denom = jnp.expand_dims(denom, axis=-1) + 1e-6  # Stability epsilon
+
+        num = jnp.einsum('bhnd, bhde -> bhne', q, context)
+
+        out = num / denom
+
+        out = out.transpose(0, 2, 1, 3).reshape(B, N, C)
+        out = self.out_proj(out)
+
+        return out.reshape(B, H, W, C)
+
+
+class FNOLayer(nnx.Module):
+    def __init__(self, in_channels, out_channels, modes, activation, rngs):
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.modes = modes
+        self.activation = activation
+
+        self.spectral_conv = SpectralConv2D(in_channels, out_channels, modes, rngs=rngs)
+        self.bypass_conv = nnx.Conv(in_channels, out_channels, kernel_size=1, rngs=rngs)
+
+    def __call__(self, x):
+        return self.activation(
+            self.spectral_conv(x)
+            + self.bypass_conv(x)
+        ) / 2
+
+
+class LAFNOLayer(nnx.Module):
+    def __init__(self, channels, modes, heads, activation, rngs):
+        self.channels = channels
+        self.modes = modes
+        self.heads = heads
+        self.activation = activation
+
+        self.spectral_conv = SpectralConv2D(channels, channels, modes, rngs=rngs)
+        self.linear_attention = LinearAttention2D(channels, num_heads=heads, rngs=rngs)
+        self.bypass_conv = nnx.Conv(channels, channels, kernel_size=1, rngs=rngs)
+
+    def __call__(self, x):
+        return self.activation(
+            self.spectral_conv(x)
+            + self.linear_attention(x)
+            + self.bypass_conv(x)
+        ) / 3
+
+
+class ScatteringFNO(nnx.Module):
+    def __init__(self, dout, hidden_dims, modes, activation, rngs):
+        self.din = 1
+        self.dout = dout
+        self.lifting = nnx.Conv(self.din, hidden_dims[0], kernel_size=1, rngs=rngs)
+        self.fourier_layers = nnx.List([
+            FNOLayer(hidden_dims[i], hidden_dims[i + 1], modes, activation, rngs)
+            for i in range(len(hidden_dims) - 1)
+        ])
+        self.projection = nnx.Conv(hidden_dims[-1], 2 * self.dout, kernel_size=1, rngs=rngs)
+
+    def __call__(self, x):
+        x = self.lifting(x[..., None])
+        for layer in self.fourier_layers:
+            x = layer(x)
         x = self.projection(x)
+        x = x[..., :self.dout] + 1j * x[..., self.dout:]
         return x
 
 
-class RealToComplexFNO(nnx.Module):
-    def __init__(
-            self, hidden_n_channels: tuple[int], n_pixels: int, mode_threshold: float,
-            activation_fn: Callable[jax.Array, jax.Array], rngs: nnx.Rngs
-    ):
-        self.fno = FourierNeuralOperator(1, 2, hidden_n_channels, n_pixels, mode_threshold, activation_fn, rngs)
+class ScatteringLAFNO(nnx.Module):
+    def __init__(self, dout, hidden_channels, n_hidden, modes, heads, activation, rngs):
+        self.din = 1
+        self.dout = dout
+        self.lifting = nnx.Conv(self.din, hidden_channels, kernel_size=1, rngs=rngs)
+        self.fourier_layers = nnx.List([
+            LAFNOLayer(hidden_channels, modes, heads, activation, rngs)
+            for _ in range(n_hidden)
+        ])
+        self.projection = nnx.Conv(hidden_channels, 2 * dout, kernel_size=1, rngs=rngs)
 
-    def __call__(self, x: jax.Array) -> jax.Array:
-        x = (self.fno(x[..., jnp.newaxis]))
-        y = x[..., 0] + 1j * x[..., 1]
-        return y
-
-    def save(self, filename):
-        _, state = nnx.split(self)
-        with open(filename, 'wb') as f:
-            pickle.dump(state, f)
-
-    @classmethod
-    def load(cls, filename, *args, **kwargs):
-        abstract_model = nnx.eval_shape(lambda: cls(*args, **kwargs, rngs=nnx.Rngs(0)))
-        graph_def, abstract_state = nnx.split(abstract_model)
-        with open(filename, 'rb') as f:
-            state_restored = pickle.load(f)
-        model = nnx.merge(graph_def, state_restored)
-        return model
-
-
-class PatternToAmpsFNO(nnx.Module):
-    def __init__(
-            self, hidden_n_channels: tuple[int], n_pixels: int, mode_threshold: float, n_propagating_modes: int,
-            activation_fn: Callable, rngs: nnx.Rngs
-    ):
-        self.fno = FourierNeuralOperator(1, 2, hidden_n_channels, n_pixels, mode_threshold, activation_fn, rngs)
-        self.propagating_indices = np.array([
-            [0, -1, 0, 0, 1, -1, -1, 1, 1, -2, 0, 0, 2, -2, -2, -1, -1, 1, 1, 2, 2, -2, -2, 2, 2, -3, 0, 0, 3, -3,
-             -3, -1, -1, 1, 1, 3, 3, -3, -3, -2, -2, 2, 2, 3, 3, -4, 0, 0, 4, -4, -4, -1, -1, 1, 1, 4, 4, -3, -3, 3,
-             3],
-            [0, 0, -1, 1, 0, -1, 1, -1, 1, 0, -2, 2, 0, -1, 1, -2, 2, -2, 2, -1, 1, -2, 2, -2, 2, 0, -3, 3, 0, -1,
-             1, -3, 3, -3, 3, -1, 1, -2, 2, -3, 3, -3, 3, -2, 2, 0, -4, 4, 0, -1, 1, -4, 4, -4, 4, -1, 1, -3, 3, -3,
-             3]
-        ])[:, :n_propagating_modes]
-
-    def __call__(self, x: jax.Array) -> jax.Array:
-        x = (self.fno(x[..., jnp.newaxis]))
-        y = x[..., 0] + 1j * x[..., 1]
-        amps = jnp.fft.fft2(y) / (64 ** 2)
-        amps = amps[..., self.propagating_indices[0], self.propagating_indices[1]]
-        return amps
+    def __call__(self, x):
+        x = self.lifting(x[..., None])
+        for layer in self.fourier_layers:
+            x = layer(x)
+        x = self.projection(x)
+        x = x[..., :self.dout] + 1j * x[..., self.dout:]
+        return x
 
 
 if __name__ == '__main__':
-    fno = FourierNeuralOperator(
-        n_in_channels=1,
-        n_out_channels=2,
-        hidden_n_channels=[64] * 3,
-        n_pixels=128,
-        mode_threshold=10,
-        activation_fn=nnx.leaky_relu,
-        rngs=nnx.Rngs(42)
-    )
-
-    print(fno.n_selected_modes)
-    import numpy as np
-    params = nnx.state(fno, nnx.Param)
-    total_params = sum(np.prod(x.shape) for x in jax.tree_util.tree_leaves(params))
-    print(total_params)
-
-    print(fno(jax.random.uniform(jax.random.key(43), (1, 128, 128, 1))).shape)
+    rngs = nnx.Rngs(42)
+    # model = ScatteringFNO(dout=2, hidden_dims=[32] * 3, modes=16, activation=nnx.gelu, rngs=rngs)
+    model = ScatteringLAFNO(dout=2, hidden_channels=32, n_hidden=3, modes=16, heads=2, activation=nnx.gelu, rngs=rngs)
+    x = jax.random.uniform(rngs(), (10, 100, 100))
+    y = model(x)
+    print(y.shape)

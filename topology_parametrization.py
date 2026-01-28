@@ -61,12 +61,32 @@ class Grid(TopologyParametrization):
         elif symmetry_type == 'central':
             big_enough_order_factor = 10 ** (len(str(grid_size)) + 1)
             i, j = np.indices((grid_size, grid_size))
-            center_i = center_j = (grid_size - 1) / 2
+            center_i = center_j = grid_size / 2 - 1 / 2
             di = np.abs(i - center_i)
             dj = np.abs(j - center_j)
             unique_ids = np.max([di, dj], axis=0) * big_enough_order_factor + np.min([di, dj], axis=0)
+        elif symmetry_type == 'bayer':
+            big_enough_order_factor = 10 ** (len(str(grid_size)) + 1)
+            ri = rj = grid_size / 4 - 1 / 2
+            bi = bj = 3 * grid_size / 4 - 1 / 2
+            i, j = np.indices((grid_size, grid_size))
+
+            di = np.minimum(np.abs(i - ri), np.abs(i - ri - grid_size))
+            dj = np.minimum(np.abs(j - rj), np.abs(j - rj - grid_size))
+            unique_ids = np.maximum(di, dj) * big_enough_order_factor + np.minimum(di, dj)
+            unique_ids *= big_enough_order_factor ** 2
+
+            di = np.minimum(np.abs(i - bi), np.abs(i - bi + grid_size))
+            dj = np.minimum(np.abs(j - bj), np.abs(j - bj + grid_size))
+            unique_ids += np.maximum(di, dj) * big_enough_order_factor + np.minimum(di, dj)
+            # unique_ids *= big_enough_order_factor ** 2
+
+            # di = np.min([np.abs(i - ri), np.abs(i - ri - grid_size), np.abs(i - bi), np.abs(i - bi + grid_size)], axis=0)
+            # dj = np.min([np.abs(j - rj), np.abs(j - rj - grid_size), np.abs(j - bj), np.abs(j - bj + grid_size)], axis=0)
+            # # unique_ids += np.maximum(di, dj) * big_enough_order_factor + np.minimum(di, dj)
+            # unique_ids = di * big_enough_order_factor + dj
         else:
-            raise ValueError("Unknown symmetry type. Allowed values: None, 'main_diagonal', 'central'")
+            raise ValueError("Unknown symmetry type. Allowed values: None, 'main_diagonal', 'central', 'bayer'")
 
         _, unique_parameter_indices, symmetry_indices = np.unique(unique_ids, return_index=True, return_inverse=True)
 
@@ -368,6 +388,40 @@ class CrossPillar(CrossPillarWithHole):
         return CrossPillarWithHole.apply_symmetry(self, geometrical_parameters)
 
 
+class CylindricalPillar(Grid):
+    def __init__(self, grid_size: int, symmetry_type: str | None = None):
+        Grid.__init__(self, grid_size, symmetry_type)
+        self.minval = 0
+
+    @staticmethod
+    def _circle_filling(relative_diameter, n_samples):
+        relative_radius = relative_diameter / 4
+        x = jnp.linspace(0, 1, n_samples)
+        x, y = jnp.meshgrid(x, x)
+        r = (x - 0.5) ** 2 + (y - 0.5) ** 2
+        filling = (relative_radius - r) * n_samples
+        return jnp.clip(filling, 0, 1)
+
+    def _generate_filling_map(self, geometrical_parameters: jnp.ndarray, n_samples: int) -> jnp.ndarray:
+        print(geometrical_parameters)
+        n_pixels_per_pillar = round(n_samples / self.grid_size)
+        geometrical_parameters = geometrical_parameters.flatten()
+        filling_blocks_flat = jax.vmap(
+            CylindricalPillar._circle_filling,
+            in_axes=(0, None)
+        )(
+            geometrical_parameters, n_pixels_per_pillar
+        )
+        filling_blocks = filling_blocks_flat.reshape(
+            self.grid_size, self.grid_size, n_pixels_per_pillar, n_pixels_per_pillar
+        )
+        filling = filling_blocks.transpose(0, 2, 1, 3).reshape(
+            self.grid_size * n_pixels_per_pillar, self.grid_size * n_pixels_per_pillar
+        )
+        filling = jax.image.resize(filling, shape=(n_samples, n_samples), method='linear')
+        return filling
+
+
 class GaussianField(Cutoff):
     def __init__(self, n_pixels, sigma, symmetry_type=None):
         self.n_pixels = n_pixels
@@ -417,7 +471,17 @@ if __name__ == '__main__':
 
     matplotlib.use('TkAgg')
 
-    topology_parametrization = GaussianField(n_pixels=100, sigma=16, symmetry_type='main_diagonal')
+    # plt.imshow(CylindricalPillar._circle_filling(1, 100))
+    # plt.show()
+    # exit()
+
+    # topology_parametrization = GaussianField(n_pixels=100, sigma=16, symmetry_type='main_diagonal')
+    # topology_parametrization = SquarePillar(6, 'bayer')
+    topology_parametrization = CylindricalPillar(2, 'bayer')
+    print(topology_parametrization.n_geometrical_parameters)
+    # plt.imshow(topology_parametrization(np.linspace(0, 1, topology_parametrization.n_geometrical_parameters + 2)[1:-1], topology_parametrization.grid_size * 20))
+    # plt.show()
+    # exit()
 
     fig, ax = plt.subplots(5, 5)
     rng_key = jax.random.key(3)
@@ -436,8 +500,9 @@ if __name__ == '__main__':
         # filling_shift = jax.random.uniform(rng_subkey, minval=-1, maxval=1)
         x += filling_shift
 
-        y = topology_parametrization(x, n_samples=128, bin_strength=1)
-        print(np.min(y), np.max(y))
+        # y = topology_parametrization(x, n_samples=128, bin_strength=1)
+        y = topology_parametrization(x, n_samples=100)
+        # print(np.min(y), np.max(y))
         # y = topology_parametrization._generate_pattern_cutoff_values(topology_parametrization.apply_symmetry(x), 100)
         # fig, ax = plt.subplots(1, 2)
         # ax[0].imshow(topology_parametrization.apply_symmetry(x))

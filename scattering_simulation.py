@@ -90,8 +90,9 @@ def prepare_lens_scattering_solver(
             backward_amplitude=trans_amps,
             layer_solve_result=solve_result_ambient
         )
-        # propagating_trans_e_x_amps = trans_e_x[:n_propagating_waves].flatten()
-        # propagating_trans_e_y_amps = trans_e_y[:n_propagating_waves].flatten()
+        trans_e_x, trans_e_y, _ = te
+        propagating_trans_e_x_amps = trans_e_x[:n_propagating_waves].flatten()
+        propagating_trans_e_y_amps = trans_e_y[:n_propagating_waves].flatten()
 
         if include_reflection:
             ref_amps, _ = amplitudes_interior[-1]

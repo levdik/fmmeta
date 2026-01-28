@@ -25,8 +25,20 @@ def detect_too_thin_solid(pattern, min_width_px):
     pattern_binary = pattern.astype(bool).astype(float)
     narrowed = 1. - _periodic_convolution(1. - pattern_binary, kernel)
     narrowed = (narrowed == 1).astype(float)
+
+    # plt.imshow(narrowed, cmap='gray_r')
+    # plt.xticks([], [])
+    # plt.yticks([], [])
+    # plt.show()
+
     narrowed_widened = _periodic_convolution(narrowed, kernel)
     narrowed_widened = narrowed_widened.astype(bool).astype(float)
+
+    # plt.imshow(narrowed_widened, cmap='gray_r')
+    # plt.xticks([], [])
+    # plt.yticks([], [])
+    # plt.show()
+
     to_remove = jnp.abs(pattern_binary - narrowed_widened) * pattern
     return to_remove
 
@@ -52,23 +64,41 @@ if __name__ == '__main__':
     matplotlib.use('TkAgg')
 
     period = 2000
-    min_width = 50
+    min_width = 250
     n_px = 256
     min_width_px = round(n_px * min_width / period)
     min_width_px = (min_width_px // 2) * 2 + 1
     print(min_width_px)
 
-    topology = topology_parametrization.FourierInterpolation(20)
-    x_init = jax.random.uniform(jax.random.key(42), topology.n_geometrical_parameters, minval=-1, maxval=1)
+    topology = topology_parametrization.FourierInterpolation(6)
+    x_init = jax.random.uniform(jax.random.key(2), topology.n_geometrical_parameters, minval=-1, maxval=1)
 
-    optimized_x, optimized_f = run_gradient_ascent(
-        lambda x: -too_thin_area(topology(x), min_width_px),
-        x_init,
-        learning_rate=1e-2,
-        n_steps=500,
-        boundary_projection_function=lambda x: jnp.clip(x, -1, 1)
-    )
-    print(optimized_f)
+    x_init = x_init.reshape(6, 6)
+    x_init = x_init.at[0, :].set(-1)
+    x_init = x_init.at[-1, :].set(-1)
+    x_init = x_init.at[:, 0].set(-1)
+    x_init = x_init.at[:, -1].set(-1)
+    x_init = x_init.flatten()
+
+    x = topology(x_init, 500)
+    plt.imshow(x, cmap='gray_r')
+    plt.xticks([], [])
+    plt.yticks([], [])
+    plt.show()
+
+    detect_too_thin_solid(x, 50)
+
+    exit()
+
+    # optimized_x, optimized_f = run_gradient_ascent(
+    #     lambda x: -too_thin_area(topology(x), min_width_px),
+    #     x_init,
+    #     learning_rate=1e-2,
+    #     n_steps=500,
+    #     boundary_projection_function=lambda x: jnp.clip(x, -1, 1)
+    # )
+    # print(optimized_f)
+    optimized_x = x_init
 
     x = topology(optimized_x, 500)
     print(too_thin_area(x, min_width_px))

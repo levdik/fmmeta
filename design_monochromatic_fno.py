@@ -4,7 +4,7 @@ import jax.numpy as jnp
 from flax import nnx
 import orbax.checkpoint as ocp
 
-from ai_fno import RealToComplexFNO, PatternToAmpsFNO
+from ai_fno_old import RealToComplexFNO, PatternToAmpsFNO
 from ai_cnn_trans import MetasurfaceTransmissionCNN, HybridFNOCNN
 import ai_fno
 from field_postprocessing import calculate_focusing_efficiency, propagate_amps_in_free_space

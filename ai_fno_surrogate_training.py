@@ -3,20 +3,16 @@ import jax.numpy as jnp
 from flax import nnx
 import optax
 
-from ai_fno import RealToComplexFNO
-
-jax.config.update('jax_enable_x64', True)
+from ai_fno import ScatteringFNO
 
 
 def train_fno_surrogate():
     rngs = nnx.Rngs(42)
-    data = jnp.load('wave_pattern_training_data/wave_red_30k_maps.npz')
+    data = jnp.load('ai_training_data/')
     x_data = data['x'].astype(float)
     y_data = data['y'].astype(complex)
     print(x_data.shape, y_data.shape)
 
-    # n_train = 27000
-    # n_val = 3000
     n_train = 100
     n_val = 10
     batch_size = 100

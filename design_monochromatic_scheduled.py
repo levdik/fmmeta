@@ -24,6 +24,7 @@ if __name__ == '__main__':
     n_px = 100
     min_width_px = round(min_feature_width * n_px / period)
     min_width_px = (min_width_px // 2) * 2 + 1
+    print('Min width px:', min_width_px)
 
     topology = topology_parametrization.GaussianField(n_px, sigma=16, symmetry_type='central')
     simulate_lens_scattering, propagating_basis_indices = prepare_lens_scattering_solver(
@@ -47,7 +48,7 @@ if __name__ == '__main__':
 
 
     init_geometrical_parameters = jax.random.uniform(
-        jax.random.key(8), (topology.n_geometrical_parameters,), minval=-1, maxval=1)
+        jax.random.key(2), (topology.n_geometrical_parameters,), minval=-1, maxval=1)
     # init_geometrical_parameters = jnp.zeros(topology.n_geometrical_parameters)
 
     init_pattern = topology(init_geometrical_parameters, n_px, bin_strength=0)
