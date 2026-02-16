@@ -6,7 +6,8 @@ from scattering_simulation import prepare_lens_scattering_solver
 
 from time import time
 
-jax.config.update('jax_enable_x64', True)
+# jax.config.update('jax_enable_x64', True)
+jax.config.update("jax_default_matmul_precision", "float32")
 
 
 if __name__ == '__main__':
