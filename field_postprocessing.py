@@ -48,7 +48,6 @@ def calculate_focused_power(amps_xy, relative_period, basis_indices, relative_fo
 
 
 def propagate_amps_in_free_space(amps, distnce, basis_indices, wavelength, period):
-    # TODO: check how it works with amps_xy
     k0 = 2 * np.pi / wavelength
     lattice_k = 2 * np.pi / period
     kx, ky = basis_indices * lattice_k
