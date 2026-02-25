@@ -98,12 +98,7 @@ def prepare_lens_scattering_solver(
             backward_amplitude=jnp.zeros_like(ref_amps),
             layer_solve_result=solve_result_ambient
         )
-        return jnp.array([
-            (te[0].squeeze(), te[1].squeeze(), te[2].squeeze()),
-            (th[0].squeeze(), th[1].squeeze(), th[2].squeeze()),
-            (re[0].squeeze(), re[1].squeeze(), re[2].squeeze()),
-            (rh[0].squeeze(), rh[1].squeeze(), rh[2].squeeze())
-        ])
+        return jnp.stack([te[0].squeeze(), te[1].squeeze(), re[0].squeeze(), re[1].squeeze()], axis=-1)
 
         return propagating_trans_e_y_amps
 
