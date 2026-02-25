@@ -62,11 +62,55 @@ def extract_amps_from_fields(fields, basis_indices):
     return all_modes[..., basis_indices[0], basis_indices[1], :]
 
 
-def amps_to_field_maps():
-    # TODO
-    pass
+def amps_to_field_maps(amps, basis_indices, n_samples):
+    '''
+    Calculates 2D field complex values from given Fourier amplitudes. amps may have a leading batch dimenstion.
+
+    Args:
+        amps : jax.Array
+            Field Fourier amplitudes of shape ([batch_size,] basis_size,)
+        basis_indices : np.ndarray
+            Integer indices of 2D Fourier expansion with shape (2, basis_size)
+        n_samples : int
+            Size of resulting field map
+    Returns:
+        field_maps : jax.Array
+            Respective complex-valued fields with shape ([batch_size,] n_samples, n_samples)
+    '''
+
+    fields_fft = jnp.zeros(amps.shape[:-1] + (n_samples, n_samples), dtype=complex)
+    n, m = basis_indices
+    fields_fft = fields_fft.at[..., n, m].set(amps)
+    fields = jnp.fft.fft2(fields_fft)
+    return fields
 
 
-def amps_to_intensity_map():
-    # TODO
-    pass
+def amps_to_intensity_map(amps_xy, basis_indices, relative_period, n_samples=100):
+    '''
+        Calculates 2D intensity map from given electric field Fourier amplitudes Ex,nm and Ey,nm.
+
+        Args:
+            amps_xy : jax.Array
+                Electric field Fourier amplitudes Ex,nm and Ey,nm of shape (2, basis_size)
+            basis_indices : np.ndarray
+                Integer indices of 2D Fourier expansion with shape (2, basis_size)
+            relative_period : float
+                Unit cell size relative to wavelength
+            n_samples (optional) : int
+                Size of resulting field map, 100 by default
+        Returns:
+            intensity_map : jax.Array
+                Intensity with shape (n_samples, n_samples)
+        '''
+
+    kx, ky = basis_indices / relative_period
+    kz = np.sqrt(1 - kx ** 2 - ky ** 2)
+
+    ex, ey = amps_xy
+    ez = (kx * ex + ky * ey) / kz
+    hx = ky * ez + kz * ey
+    hy = -(kz * ex + kx * ez)
+
+    ex_map, ey_map, hx_map, hy_map = amps_to_field_maps(jnp.stack([ex, ey, hx, hy], axis=0), basis_indices, n_samples)
+    intensity_map = -jnp.real(ex_map * jnp.conj(hy_map) - ey_map * jnp.conj(hx_map))
+    return intensity_map
