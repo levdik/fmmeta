@@ -54,3 +54,19 @@ def propagate_amps_in_free_space(amps, distnce, basis_indices, wavelength, perio
     kz = np.sqrt(k0 ** 2 - kx ** 2 - ky ** 2, dtype=complex)
     propagated_amps = amps * jnp.exp(1j * kz * distnce)
     return propagated_amps
+
+
+def extract_amps_from_fields(fields, basis_indices):
+    h, w, c = fields.shape[-3:]
+    all_modes = jnp.fft.fft2(fields, axes=(-3, -2)) / (h * w)
+    return all_modes[..., basis_indices[0], basis_indices[1], :]
+
+
+def amps_to_field_maps():
+    # TODO
+    pass
+
+
+def amps_to_intensity_map():
+    # TODO
+    pass

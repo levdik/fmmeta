@@ -403,7 +403,6 @@ class CylindricalPillar(Grid):
         return jnp.clip(filling, 0, 1)
 
     def _generate_filling_map(self, geometrical_parameters: jnp.ndarray, n_samples: int) -> jnp.ndarray:
-        print(geometrical_parameters)
         n_pixels_per_pillar = round(n_samples / self.grid_size)
         geometrical_parameters = geometrical_parameters.flatten()
         filling_blocks_flat = jax.vmap(
