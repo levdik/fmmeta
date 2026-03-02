@@ -47,6 +47,16 @@ def calculate_focused_power(amps_xy, relative_period, basis_indices, relative_fo
     return focused_power
 
 
+def normalize_power(amps, relative_period, basis_indices):
+    trans_amps_xy = amps[:2]
+    ref_amps_xy = amps[2:]
+    total_power = (
+        calculate_total_power(trans_amps_xy, relative_period, basis_indices)
+        + calculate_total_power(ref_amps_xy, relative_period, basis_indices)
+    )
+    return amps / jnp.sqrt(total_power)
+
+
 def propagate_amps_in_free_space(amps, distnce, basis_indices, wavelength, period):
     k0 = 2 * np.pi / wavelength
     lattice_k = 2 * np.pi / period
