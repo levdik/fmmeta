@@ -395,11 +395,11 @@ class CylindricalPillar(Grid):
 
     @staticmethod
     def _circle_filling(relative_diameter, n_samples):
-        relative_radius = relative_diameter / 4
-        x = jnp.linspace(0, 1, n_samples)
+        relative_radius = relative_diameter / 2
+        x = jnp.linspace(0, 1, n_samples, endpoint=False) + 0.5 / n_samples
         x, y = jnp.meshgrid(x, x)
-        r = (x - 0.5) ** 2 + (y - 0.5) ** 2
-        filling = (relative_radius - r) * n_samples
+        r = jnp.sqrt((x - 0.5) ** 2 + (y - 0.5) ** 2)
+        filling = (relative_radius - r) * n_samples + 0.5
         return jnp.clip(filling, 0, 1)
 
     def _generate_filling_map(self, geometrical_parameters: jnp.ndarray, n_samples: int) -> jnp.ndarray:
@@ -470,9 +470,9 @@ if __name__ == '__main__':
 
     matplotlib.use('TkAgg')
 
-    # plt.imshow(CylindricalPillar._circle_filling(1, 100))
-    # plt.show()
-    # exit()
+    plt.imshow(CylindricalPillar._circle_filling(9/11, 11))
+    plt.show()
+    exit()
 
     # topology_parametrization = GaussianField(n_pixels=100, sigma=16, symmetry_type='main_diagonal')
     # topology_parametrization = SquarePillar(6, 'bayer')
