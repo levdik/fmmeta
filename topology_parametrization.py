@@ -447,12 +447,58 @@ class GaussianField(Cutoff):
             raise ValueError('Unknown symmetry type')
         return x
 
+    def fourier_upscale(x, n_out):
+        n_in = geometrical_parameters.shape[0]
+        fourier_amps = jnp.fft.fftshift(jnp.fft.fft2(geometrical_parameters))
+
+        shift_between_pixel_centers = (1 / n_in - 1 / n_out) / 2
+        single_axis_freq = jnp.fft.fftshift(jnp.fft.fftfreq(n_in, d=1 / n_in))
+        i_freq, j_freq = jnp.meshgrid(single_axis_freq, single_axis_freq)
+        fourier_amps *= jnp.exp(-1j * 2 * jnp.pi * shift_between_pixel_centers * (i_freq + j_freq))
+
+        upscaled_fourier_amps = jnp.zeros((n_out, n_out), dtype=complex)
+        half = n_in // 2
+        start = n_out // 2 - half
+        end = start + n_in
+        upscaled_fourier_amps = upscaled_fourier_amps.at[start:end, start:end].set(fourier_amps)
+        upscaled_fourier_amps = jnp.fft.ifftshift(upscaled_fourier_amps)
+        interpolated_values = jnp.fft.ifft2(upscaled_fourier_amps).real
+        interpolated_values *= (n_out / n_in) ** 2
+
+        return interpolated_values
+
     def _generate_pattern_cutoff_values(self, geometrical_parameters: jnp.ndarray, n_samples: int) -> jnp.ndarray:
-        filtered = jnp.fft.ifft2(self.fourier_filter * jnp.fft.fft2(geometrical_parameters)).real
-        return filtered * jnp.sqrt(self.fourier_filter.size / jnp.sum(jnp.abs(self.fourier_filter) ** 2))
-        # filtered = (filtered - jnp.min(filtered)) / (jnp.max(filtered) - jnp.min(filtered))
-        # filtered = filtered * 2 - 1
-        # return filtered
+        n_in = geometrical_parameters.shape[0]
+        n_out = n_samples
+
+        filtered_fft = self.fourier_filter * jnp.fft.fft2(geometrical_parameters)
+
+        if n_out > n_in:
+            n_in = geometrical_parameters.shape[0]
+            fourier_amps = jnp.fft.fftshift(filtered_fft)
+            shift_between_pixel_centers = (1 / n_in - 1 / n_out) / 2
+            single_axis_freq = jnp.fft.fftshift(jnp.fft.fftfreq(n_in, d=1 / n_in))
+            i_freq, j_freq = jnp.meshgrid(single_axis_freq, single_axis_freq)
+            fourier_amps *= jnp.exp(-1j * 2 * jnp.pi * shift_between_pixel_centers * (i_freq + j_freq))
+
+            upscaled_fourier_amps = jnp.zeros((n_out, n_out), dtype=complex)
+            half = n_in // 2
+            start = n_out // 2 - half
+            end = start + n_in
+            upscaled_fourier_amps = upscaled_fourier_amps.at[start:end, start:end].set(fourier_amps)
+            upscaled_fourier_amps = jnp.fft.ifftshift(upscaled_fourier_amps)
+            filtered_fft = upscaled_fourier_amps
+
+        filtered = jnp.fft.ifft2(filtered_fft).real
+        filtered *= jnp.sqrt(self.fourier_filter.size / jnp.sum(jnp.abs(self.fourier_filter) ** 2))
+
+        if n_out > n_in:
+            filtered *= (n_out / n_in) ** 2
+
+        if n_out < n_in:
+            filtered = jax.image.resize(filtered, (n_samples, n_samples), method='linear')
+
+        return filtered
 
     def _generate_filling_map(
             self, geometrical_parameters: jnp.ndarray, n_samples: int, bin_strength: float = 1.
@@ -460,7 +506,7 @@ class GaussianField(Cutoff):
         cutoff_values = self._generate_pattern_cutoff_values(geometrical_parameters, n_samples)
         binarised_with_edges = Cutoff._generate_filling_map(self, geometrical_parameters, n_samples)
         soft_binarized = bin_strength * binarised_with_edges + ((cutoff_values + 1) / 2) * (1 - bin_strength)
-        soft_binarized = jax.image.resize(soft_binarized, (n_samples, n_samples), method='linear')
+        # soft_binarized = jax.image.resize(soft_binarized, (n_samples, n_samples), method='linear')
         return soft_binarized
 
 
@@ -470,9 +516,9 @@ if __name__ == '__main__':
 
     matplotlib.use('TkAgg')
 
-    plt.imshow(CylindricalPillar._circle_filling(9/11, 11))
-    plt.show()
-    exit()
+    # plt.imshow(CylindricalPillar._circle_filling(9/11, 11))
+    # plt.show()
+    # exit()
 
     # topology_parametrization = GaussianField(n_pixels=100, sigma=16, symmetry_type='main_diagonal')
     # topology_parametrization = SquarePillar(6, 'bayer')
