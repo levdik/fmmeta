@@ -19,6 +19,11 @@ def _periodic_convolution(x, kernel):
     return convolved
 
 
+def _clean_floating_edges(x):
+    expand_by_1 = _periodic_convolution((x == 1), kernel=np.ones((3, 3)))
+    return x * (expand_by_1.astype(bool))
+
+
 def detect_too_thin_solid(pattern, min_width_px):
     min_width_px = (min_width_px // 2) * 2 + 1
     kernel = _circular_kernel(min_width_px)
@@ -40,7 +45,7 @@ def detect_too_thin_solid(pattern, min_width_px):
     # plt.show()
 
     to_remove = jnp.abs(pattern_binary - narrowed_widened) * pattern
-    return to_remove
+    return _clean_floating_edges(to_remove)
 
 
 def detect_too_thin_void(pattern, min_width_px):
